@@ -1,0 +1,86 @@
+{
+  "name": "@actioncodes/protocol-v2",
+  "version": "2.0.0",
+  "module": "index.ts",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "keywords": [
+    "solana",
+    "ota-protocol",
+    "ota-protocol-sdk",
+    "ota-protocol-utils",
+    "ota-protocol-types",
+    "ota-protocol-constants"
+  ],
+  "homepage": "https://actioncodes.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/otaprotocol/protocol-v2"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "tag": "latest",
+    "access": "public"
+  },
+  "files": [
+    "docs",
+    "dist",
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun lint && bun run test && bun run build:all",
+    "build:js": "bun run build.js",
+    "build:types": "tsc --project tsconfig.build.json",
+    "build:all": "bun run build:js && bun run build:types",
+    "lint": "eslint .",
+    "test": "bun test",
+    "docs": "typedoc --out docs/ --entryPointStrategy expand --tsconfig ./tsconfig.json --plugin typedoc-plugin-markdown ./src",
+    "publish:package": "bun lint && bun run build:all && bun publish --access public",
+    "release": "bun lint && bun version patch && bun run build:all && bun publish --access public",
+    "release:patch": "bun lint && bun version patch && bun run build:all && bun publish --access public",
+    "release:minor": "bun lint && bun version minor && bun run build:all && bun publish --access public",
+    "release:major": "bun lint && bun version major && bun run build:all && bun publish --access public",
+    "publish:dry": "bun lint && bun run build:all && bun publish --access public --dry-run",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.0.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.3",
+    "@semantic-release/npm": "^12.0.2",
+    "@types/bun": "latest",
+    "@types/jest": "^30.0.0",
+    "eslint": "^9.36.0",
+    "globals": "^16.4.0",
+    "husky": "^9.1.7",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.4",
+    "typedoc": "^0.28.13",
+    "typescript-eslint": "^8.45.0"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "@solana/spl-memo": "^0.2.5",
+    "bs58": "^6.0.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "packageManager": "pnpm@10.13.1"
+}
