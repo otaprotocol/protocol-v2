@@ -3,7 +3,7 @@ import {
   SolanaAdapter,
   type SolanaTransaction,
 } from "../src/adapters/SolanaAdapter";
-import { NodeCryptoAdapter } from "../src/adapters/NodeCryptoAdapter";
+import { NodeCryptoAdapter } from "../examples/customadapter/NodeCryptoAdapter";
 import { codeHash } from "../src/utils/crypto";
 import { Keypair } from "@solana/web3.js";
 import { Transaction } from "@solana/web3.js";

@@ -12,5 +12,6 @@ export default defineConfig([
     "**/*.test.ts",
     "tests/**/*.ts",
     "dist/**",
+    "examples/**",
   ]),
 ]);

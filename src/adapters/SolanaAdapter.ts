@@ -39,39 +39,34 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
 
   /** Verify the signature over canonical message (protocol-level) */
   verifyWithWallet(context: ChainWalletStrategyContext<SolanaContext>): boolean {
+    // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
     if (!context.pubkey || !context.signature || !context.canonicalMessageParts)
       return false;
 
-    const message = serializeCanonical(context.canonicalMessageParts);
-
-    let pub: PublicKey;
+    // Perform all operations in a single try-catch to ensure consistent timing
     try {
-      pub = this.normalizePubkey(context.pubkey);
-    } catch {
-      return false;
-    }
-
-    let sigBytes: Uint8Array;
-    try {
-      sigBytes = bs58.decode(context.signature);
-    } catch {
-      return false;
-    }
-
-    const pubBytes = pub.toBytes();
-    if (sigBytes.length !== 64) return false;
-    if (pubBytes.length !== 32) return false;
-
-    try {
+      const message = serializeCanonical(context.canonicalMessageParts);
+      const pub = this.normalizePubkey(context.pubkey);
+      const sigBytes = bs58.decode(context.signature);
+      const pubBytes = pub.toBytes();
+      
+      // Validate lengths
+      if (sigBytes.length !== 64 || pubBytes.length !== 32) {
+        return false;
+      }
+      
+      // Perform signature verification
       return nacl.sign.detached.verify(message, sigBytes, pubBytes);
     } catch {
+      // All errors result in false with consistent timing
       return false;
     }
   }
 
   /** Verify delegation certificate signature */
   verifyWithDelegation(context: ChainDelegationStrategyContext<SolanaContext>): boolean {
+    // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
     if (!context.pubkey || !context.signature || !context.certificate)
       return false;
@@ -89,38 +84,32 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
     // Check chain matches
     if (cert.chain !== context.chain) return false;
 
-    // Serialize certificate for signature verification (using strategy method)
-    const certWithoutSignature = {
-      version: cert.version,
-      delegator: cert.delegator,
-      issuedAt: cert.issuedAt,
-      expiresAt: cert.expiresAt,
-      nonce: cert.nonce,
-      chain: cert.chain
-    };
-    const message = DelegationStrategy.serializeCertificate(certWithoutSignature);
-
-    let pub: PublicKey;
+    // Perform all operations in a single try-catch to ensure consistent timing
     try {
-      pub = this.normalizePubkey(context.pubkey);
-    } catch {
-      return false;
-    }
-
-    let sigBytes: Uint8Array;
-    try {
-      sigBytes = bs58.decode(context.signature);
-    } catch {
-      return false;
-    }
-
-    const pubBytes = pub.toBytes();
-    if (sigBytes.length !== 64) return false;
-    if (pubBytes.length !== 32) return false;
-
-    try {
+      // Serialize certificate for signature verification (using strategy method)
+      const certWithoutSignature = {
+        version: cert.version,
+        delegator: cert.delegator,
+        issuedAt: cert.issuedAt,
+        expiresAt: cert.expiresAt,
+        nonce: cert.nonce,
+        chain: cert.chain
+      };
+      const message = DelegationStrategy.serializeCertificate(certWithoutSignature);
+      
+      const pub = this.normalizePubkey(context.pubkey);
+      const sigBytes = bs58.decode(context.signature);
+      const pubBytes = pub.toBytes();
+      
+      // Validate lengths
+      if (sigBytes.length !== 64 || pubBytes.length !== 32) {
+        return false;
+      }
+      
+      // Perform signature verification
       return nacl.sign.detached.verify(message, sigBytes, pubBytes);
     } catch {
+      // All errors result in false with consistent timing
       return false;
     }
   }

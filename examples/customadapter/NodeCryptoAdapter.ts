@@ -1,16 +1,16 @@
 // !! this is only for demonstration purposes, do not use in production
 // this shouldnt be exported from the package
 import { createSign, createVerify, createPublicKey, generateKeyPairSync, KeyObject } from "crypto";
-import { BaseChainAdapter, type ChainWalletStrategyContext, type ChainDelegationStrategyContext } from "./BaseChainAdapter";
+import { BaseChainAdapter, type ChainWalletStrategyContext, type ChainDelegationStrategyContext } from "../../src/adapters/BaseChainAdapter";
 import {
   buildProtocolMeta,
   parseProtocolMeta,
   type ProtocolMetaFields,
-} from "../utils/protocolMeta";
-import { codeHash } from "../utils/crypto";
-import { serializeCanonical } from "../utils/canonical";
-import type { ActionCode } from "../types";
-import { ProtocolError } from "../errors";
+} from "../../src/utils/protocolMeta";
+import { codeHash } from "../../src/utils/crypto";
+import { serializeCanonical } from "../../src/utils/canonical";
+import type { ActionCode } from "../../src/types";
+import { ProtocolError } from "../../src/errors";
 
 export type NodeCryptoContext = {
   pubkey: string; // PEM format public key
