@@ -22,6 +22,9 @@ export enum ProtocolErrorCode {
   // Crypto errors
   CRYPTO_ERROR = "CRYPTO_ERROR",
   INVALID_DIGEST = "INVALID_DIGEST",
+
+  // Adapter errors
+  INVALID_ADAPTER = "INVALID_ADAPTER",
 }
 
 export class ProtocolError extends Error {
@@ -123,6 +126,11 @@ export class ProtocolError extends Error {
     );
   }
 
+  // Adapter errors
+  static invalidAdapter(adapter: string): InvalidAdapterError {
+    return new InvalidAdapterError(adapter);
+  }
+
   // Generic error creator
   static create(code: ProtocolErrorCode, message: string, details?: Record<string, unknown>): ProtocolError {
     return new ProtocolError(code, message, details);
@@ -203,5 +211,12 @@ export class InvalidCodeFormatError extends ProtocolError {
       { code, reason }
     );
     this.name = "InvalidCodeFormatError";
+  }
+}
+
+export class InvalidAdapterError extends ProtocolError {
+  constructor(adapter: string) {
+    super(ProtocolErrorCode.INVALID_ADAPTER, `Invalid adapter: ${adapter}`, { adapter });
+    this.name = "InvalidAdapterError";
   }
 }

@@ -11,6 +11,7 @@ import type {
 import { WalletStrategy } from "./strategy/WalletStrategy";
 import { DelegationStrategy } from "./strategy/DelegationStrategy";
 import { SolanaAdapter, type SolanaContext } from "./adapters/SolanaAdapter";
+import { ProtocolError } from "./errors";
 
 export class ActionCodesProtocol {
   private adapters: Record<string, ChainAdapter> = {};
@@ -133,7 +134,7 @@ export class ActionCodesProtocol {
         "canonicalMessageParts"
       >;
       const adapter = this.getAdapter(context.chain);
-      if (!adapter) return;
+      if (!adapter) throw ProtocolError.invalidAdapter(context.chain);
 
       const ok = adapter.verifyWithWallet({
         ...context,
@@ -149,7 +150,7 @@ export class ActionCodesProtocol {
     } else {
       const certificate = param2 as DelegationCertificate;
       const adapter = this.getAdapter(certificate.chain);
-      if (!adapter) return;
+      if (!adapter) throw ProtocolError.invalidAdapter(certificate.chain);
 
       const ok = adapter.verifyWithDelegation({
         chain: certificate.chain,
