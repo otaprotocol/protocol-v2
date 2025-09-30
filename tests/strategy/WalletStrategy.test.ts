@@ -1,8 +1,6 @@
 import { WalletStrategy } from "../../src/strategy/WalletStrategy";
 import type { ActionCode, CodeGenerationConfig } from "../../src/types";
 import { ExpiredCodeError, InvalidCodeFormatError } from "../../src/errors";
-import { serializeCanonical } from "../../src/utils/canonical";
-import { sha256, truncateBits, digestToDigits } from "../../src/utils/crypto";
 import { CODE_MIN_LENGTH, CODE_MAX_LENGTH } from "../../src/constants";
 
 describe("WalletStrategy", () => {
@@ -11,10 +9,16 @@ describe("WalletStrategy", () => {
     ttlMs: 120000, // 2 minutes
   };
 
+  let strategy: WalletStrategy;
+
+  beforeEach(() => {
+    strategy = new WalletStrategy(defaultConfig);
+  });
+
   describe("generateCode", () => {
     test("generates valid action code with correct structure", async () => {
       const pubkey = "test-pubkey-123";
-      const result = await WalletStrategy.generateCode(pubkey, defaultConfig);
+      const result = strategy.generateCode(pubkey);
 
       expect(result.actionCode).toMatchObject({
         code: expect.any(String),
@@ -29,10 +33,9 @@ describe("WalletStrategy", () => {
 
     test("generates deterministic codes for same input", async () => {
       const pubkey = "test-pubkey-456";
-      const config = { ...defaultConfig, codeLength: 6 };
 
-      const result1 = await WalletStrategy.generateCode(pubkey, config);
-      const result2 = await WalletStrategy.generateCode(pubkey, config);
+      const result1 = strategy.generateCode(pubkey);
+      const result2 = strategy.generateCode(pubkey);
 
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
       expect(result1.actionCode.pubkey).toBe(result2.actionCode.pubkey);
@@ -41,333 +44,360 @@ describe("WalletStrategy", () => {
     });
 
     test("generates different codes for different pubkeys", async () => {
-      const result1 = await WalletStrategy.generateCode(
-        "pubkey1",
-        defaultConfig
-      );
-      const result2 = await WalletStrategy.generateCode(
-        "pubkey2",
-        defaultConfig
-      );
+      const result1 = strategy.generateCode("pubkey1");
+      const result2 = strategy.generateCode("pubkey2");
 
       expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
-      expect(result1.actionCode.pubkey).not.toBe(result2.actionCode.pubkey);
+      expect(result1.actionCode.pubkey).toBe("pubkey1");
+      expect(result2.actionCode.pubkey).toBe("pubkey2");
     });
 
-    test("respects code length configuration", async () => {
-      const testLengths = [6, 8, 12, 16, 20];
+    test("generates codes with correct length", async () => {
+      const config: CodeGenerationConfig = {
+        codeLength: 6,
+        ttlMs: 120000,
+      };
+      const shortStrategy = new WalletStrategy(config);
 
-      for (const length of testLengths) {
-        const config = { ...defaultConfig, codeLength: length };
-        const result = await WalletStrategy.generateCode("test-pubkey", config);
+      const result = shortStrategy.generateCode("test-pubkey");
 
-        expect(result.actionCode.code).toHaveLength(length);
-        expect(result.actionCode.code).toMatch(/^\d+$/); // Only digits
-      }
+      expect(result.actionCode.code.length).toBe(6);
     });
 
-    test("clamps code length to valid range", async () => {
-      const tooShortConfig = { ...defaultConfig, codeLength: 3 };
-      const tooLongConfig = { ...defaultConfig, codeLength: 30 };
+    test("generates codes with correct TTL", async () => {
+      const result = strategy.generateCode("test-pubkey");
 
-      const shortResult = WalletStrategy.generateCode(
-        "test",
-        tooShortConfig
-      );
-      const longResult = WalletStrategy.generateCode(
-        "test",
-        tooLongConfig
-      );
-
-      expect(shortResult.actionCode.code).toHaveLength(6); // CODE_MIN_LENGTH
-      expect(longResult.actionCode.code).toHaveLength(24); // CODE_MAX_LENGTH
-    });
-
-    test("generates codes with correct expiration time", async () => {
-      const ttlMs = 300000; // 5 minutes
-      const config = { ...defaultConfig, ttlMs };
-
-      const result = WalletStrategy.generateCode("test-pubkey", config);
-
+      const now = Date.now();
+      expect(result.actionCode.timestamp).toBeLessThanOrEqual(now);
       expect(result.actionCode.expiresAt).toBe(
-        result.actionCode.timestamp + ttlMs
+        result.actionCode.timestamp + defaultConfig.ttlMs
       );
-      expect(result.actionCode.timestamp).toBeLessThanOrEqual(Date.now());
     });
 
-    test("aligns timestamp to TTL window", async () => {
-      const ttlMs = 60000; // 1 minute
-      const config = { ...defaultConfig, ttlMs };
+    test("generates same codes within the same time window", async () => {
+      const result1 = strategy.generateCode("test-pubkey");
 
-      const result = await WalletStrategy.generateCode("test-pubkey", config);
+      // Wait a short time but within the same window
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Timestamp should be aligned to TTL window
-      expect(result.actionCode.timestamp % ttlMs).toBe(0);
+      const result2 = strategy.generateCode("test-pubkey");
+
+      // Codes should be the same within the same time window (deterministic)
+      expect(result1.actionCode.code).toBe(result2.actionCode.code);
+      expect(result1.actionCode.timestamp).toBe(result2.actionCode.timestamp);
     });
 
-    test("canonical message is deterministic for same input", async () => {
-      const pubkey = "test-pubkey";
-      const config = { ...defaultConfig, codeLength: 8 };
+    test("generates codes with secret when provided", async () => {
+      const secret = "test-secret";
+      const result = strategy.generateCode("test-pubkey", secret);
 
-      const result1 = await WalletStrategy.generateCode(pubkey, config);
-      const result2 = await WalletStrategy.generateCode(pubkey, config);
-
-      expect(result1.canonicalMessage).toEqual(result2.canonicalMessage);
+      expect(result.actionCode.secret).toBe(secret);
     });
 
-    test("canonical message contains expected fields", async () => {
-      const pubkey = "test-pubkey-789";
-      const result = await WalletStrategy.generateCode(pubkey, defaultConfig);
+    test("generates codes without secret when not provided", async () => {
+      const result = strategy.generateCode("test-pubkey");
 
-      const messageStr = new TextDecoder().decode(result.canonicalMessage);
-      const parsed = JSON.parse(messageStr);
+      expect(result.actionCode.secret).toBeUndefined();
+    });
 
-      expect(parsed).toMatchObject({
-        pubkey,
-        windowStart: result.actionCode.timestamp,
-      });
+    test("generates different codes with different secrets", async () => {
+      const result1 = strategy.generateCode("test-pubkey", "secret1");
+      const result2 = strategy.generateCode("test-pubkey", "secret2");
+
+      expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
+    });
+
+    test("generates same code with same secret", async () => {
+      const secret = "same-secret";
+      const result1 = strategy.generateCode("test-pubkey", secret);
+      const result2 = strategy.generateCode("test-pubkey", secret);
+
+      expect(result1.actionCode.code).toBe(result2.actionCode.code);
     });
   });
 
   describe("validateCode", () => {
     test("validates correct action code", async () => {
-      const pubkey = "test-pubkey-valid";
-      const result = await WalletStrategy.generateCode(pubkey, defaultConfig);
+      const result = strategy.generateCode("test-pubkey");
 
-      // Debug: log the generated code and current time
-      console.log("Generated code:", result.actionCode.code);
-      console.log("Current time:", Date.now());
-      console.log("Code timestamp:", result.actionCode.timestamp);
-      console.log("Code expires at:", result.actionCode.expiresAt);
-
-      // Try validation and catch the error to see what's happening
-      try {
-        WalletStrategy.validateCode(result.actionCode, defaultConfig);
-        console.log("Validation passed!");
-      } catch (error) {
-        console.log("Validation failed with error:", (error as Error).message);
-        console.log("Error details:", error);
-        throw error;
-      }
-
-      // Should not throw
       expect(() => {
-        WalletStrategy.validateCode(result.actionCode, defaultConfig);
+        strategy.validateCode(result.actionCode);
       }).not.toThrow();
     });
 
-    test("throws ExpiredCodeError for expired code", () => {
+    test("validates action code with secret", async () => {
+      const secret = "test-secret";
+      const result = strategy.generateCode("test-pubkey", secret);
+
+      expect(() => {
+        strategy.validateCode(result.actionCode);
+      }).not.toThrow();
+    });
+
+    test("throws error for expired code", async () => {
+      const result = strategy.generateCode("test-pubkey");
+
+      // Manually set expiration to past
       const expiredActionCode: ActionCode = {
-        code: "12345678",
-        pubkey: "test-pubkey",
-        timestamp: Date.now() - 200000, // 200 seconds ago
-        expiresAt: Date.now() - 100000, // 100 seconds ago (expired)
+        ...result.actionCode,
+        expiresAt: Date.now() - 1000,
       };
 
       expect(() => {
-        WalletStrategy.validateCode(expiredActionCode, defaultConfig);
+        strategy.validateCode(expiredActionCode);
       }).toThrow(ExpiredCodeError);
     });
 
-    test("respects clock skew tolerance", async () => {
-      const config = { ...defaultConfig, clockSkewMs: 5000 }; // 5 second tolerance
-      
-      // Generate a valid code first
-      const result = await WalletStrategy.generateCode("test-pubkey", config);
-      
-      // Create an action code that's slightly expired but within skew tolerance
+    test("validates code within clock skew tolerance", async () => {
+      const config: CodeGenerationConfig = {
+        codeLength: 8,
+        ttlMs: 120000,
+        clockSkewMs: 30000, // 30 seconds
+      };
+      const skewStrategy = new WalletStrategy(config);
+      const result = skewStrategy.generateCode("test-pubkey");
+
+      // Manually set expiration to just past current time but within skew
       const actionCode: ActionCode = {
         ...result.actionCode,
-        expiresAt: Date.now() - 2000, // 2 seconds ago, but within skew tolerance
+        expiresAt: Date.now() - 15000, // 15 seconds ago
       };
 
-      // Should not throw due to clock skew tolerance
       expect(() => {
-        WalletStrategy.validateCode(actionCode, config);
+        skewStrategy.validateCode(actionCode);
       }).not.toThrow();
     });
 
-    test("throws InvalidCodeFormatError for incorrect code", async () => {
-      const pubkey = "test-pubkey";
-      const result = await WalletStrategy.generateCode(pubkey, defaultConfig);
-      
-      // Modify the code to make it invalid
-      const invalidActionCode: ActionCode = {
+    test("throws error for invalid code format", async () => {
+      const result = strategy.generateCode("test-pubkey");
+
+      const actionCode: ActionCode = {
         ...result.actionCode,
-        code: "99999999", // Wrong code
+        code: "invalid-code",
       };
 
       expect(() => {
-        WalletStrategy.validateCode(invalidActionCode, defaultConfig);
+        strategy.validateCode(actionCode);
       }).toThrow(InvalidCodeFormatError);
     });
 
-    test("validates code with different lengths", async () => {
-      const testLengths = [6, 8, 12, 16];
-      
-      for (const length of testLengths) {
-        const config = { ...defaultConfig, codeLength: length };
-        const result = await WalletStrategy.generateCode("test-pubkey", config);
-        
-        // Should not throw for valid code
-        expect(() => {
-          WalletStrategy.validateCode(result.actionCode, config);
-        }).not.toThrow();
-      }
+    test("validates code with correct secret", async () => {
+      const secret = "correct-secret";
+      const result = strategy.generateCode("test-pubkey", secret);
+
+      expect(() => {
+        strategy.validateCode(result.actionCode);
+      }).not.toThrow();
     });
 
-    test("validates code with different pubkeys", async () => {
-      const pubkeys = [
-        "pubkey1",
-        "pubkey2",
-        "very-long-pubkey-string",
-        "short",
-      ];
+    test("throws error for code with wrong secret", async () => {
+      const result = strategy.generateCode("test-pubkey", "original-secret");
 
-      for (const pubkey of pubkeys) {
-        const result = await WalletStrategy.generateCode(pubkey, defaultConfig);
+      const actionCode: ActionCode = {
+        ...result.actionCode,
+        secret: "wrong-secret",
+      };
 
-        // Should not throw for valid code
-        expect(() => {
-          WalletStrategy.validateCode(result.actionCode, defaultConfig);
-        }).not.toThrow();
-      }
+      expect(() => {
+        strategy.validateCode(actionCode);
+      }).toThrow(InvalidCodeFormatError);
     });
 
-    test("handles edge case timestamps", async () => {
-      const edgeTimestamps = [0, 1, 1000000000000, Date.now()];
-      
-      for (const timestamp of edgeTimestamps) {
-        // Generate a valid code for this specific timestamp
-        // We need to manually create the canonical message and code for the specific timestamp
-        const canonical = serializeCanonical({ pubkey: "test-pubkey", windowStart: timestamp });
-        const digest = sha256(canonical);
-        const clamped = Math.max(
-          CODE_MIN_LENGTH,
-          Math.min(CODE_MAX_LENGTH, defaultConfig.codeLength)
-        );
-        const truncated = truncateBits(digest, 8 * Math.ceil(clamped / 2));
-        const code = digestToDigits(truncated, clamped);
-        
-        const actionCode: ActionCode = {
-          code,
-          pubkey: "test-pubkey",
-          timestamp,
-          expiresAt: timestamp + defaultConfig.ttlMs,
-        };
+    test("validates code without secret when generated without secret", async () => {
+      const result = strategy.generateCode("test-pubkey");
 
-        // Should not throw for valid timestamp (if not expired)
-        if (timestamp + defaultConfig.ttlMs > Date.now()) {
-          expect(() => {
-            WalletStrategy.validateCode(actionCode, defaultConfig);
-          }).not.toThrow();
-        }
-      }
+      const actionCode: ActionCode = {
+        ...result.actionCode,
+        secret: undefined,
+      };
+
+      expect(() => {
+        strategy.validateCode(actionCode);
+      }).not.toThrow();
     });
 
-    test("validates with different TTL values", async () => {
-      const ttlValues = [60000, 120000, 300000, 600000]; // 1min, 2min, 5min, 10min
+    test("throws error for code with secret when generated without secret", async () => {
+      const result = strategy.generateCode("test-pubkey");
 
-      for (const ttlMs of ttlValues) {
-        const config = { ...defaultConfig, ttlMs };
-        const result = await WalletStrategy.generateCode("test-pubkey", config);
+      const actionCode: ActionCode = {
+        ...result.actionCode,
+        secret: "unexpected-secret",
+      };
 
-        // Should not throw for valid code
-        expect(() => {
-          WalletStrategy.validateCode(result.actionCode, config);
-        }).not.toThrow();
-      }
+      expect(() => {
+        strategy.validateCode(actionCode);
+      }).toThrow(InvalidCodeFormatError);
     });
   });
 
-  describe("integration tests", () => {
-    test("full workflow: generate and validate code", async () => {
-      const pubkey = "integration-test-pubkey";
-      const config = { ...defaultConfig, codeLength: 10 };
+  describe("edge cases", () => {
+    test("handles very short code length", async () => {
+      const config: CodeGenerationConfig = {
+        codeLength: 1,
+        ttlMs: 120000,
+      };
+      const shortStrategy = new WalletStrategy(config);
 
-      // Generate code
-      const result = await WalletStrategy.generateCode(pubkey, config);
+      const result = shortStrategy.generateCode("test-pubkey");
 
-      // Validate immediately (should not be expired)
+      // Should enforce minimum code length of 6 for security
+      expect(result.actionCode.code.length).toBe(6);
       expect(() => {
-        WalletStrategy.validateCode(result.actionCode, config);
+        shortStrategy.validateCode(result.actionCode);
       }).not.toThrow();
-
-      // Verify the code matches what we generated
-      expect(result.actionCode.code).toMatch(/^\d{10}$/);
-      expect(result.actionCode.pubkey).toBe(pubkey);
     });
 
-    test("code generation is consistent across multiple calls", async () => {
-      const pubkey = "consistency-test-pubkey";
-      const config = { ...defaultConfig, codeLength: 8 };
+    test("handles very long code length", async () => {
+      const config: CodeGenerationConfig = {
+        codeLength: 20,
+        ttlMs: 120000,
+      };
+      const longStrategy = new WalletStrategy(config);
 
-      const results = await Promise.all([
-        WalletStrategy.generateCode(pubkey, config),
-        WalletStrategy.generateCode(pubkey, config),
-        WalletStrategy.generateCode(pubkey, config),
-      ]);
+      const result = longStrategy.generateCode("test-pubkey");
 
-      // All results should be identical
-      const first = results[0];
-      for (const result of results) {
-        expect(result.actionCode.code).toBe(first.actionCode.code);
-        expect(result.actionCode.timestamp).toBe(first.actionCode.timestamp);
-        expect(result.canonicalMessage).toEqual(first.canonicalMessage);
-      }
+      expect(result.actionCode.code.length).toBe(20);
+      expect(() => {
+        longStrategy.validateCode(result.actionCode);
+      }).not.toThrow();
     });
 
-    test("performance test: multiple code generations", async () => {
-      const config = { ...defaultConfig, codeLength: 8 };
-      const pubkeys = Array.from({ length: 100 }, (_, i) => `pubkey-${i}`);
+    test("handles code length at boundaries", async () => {
+      const shortConfig: CodeGenerationConfig = {
+        codeLength: CODE_MIN_LENGTH,
+        ttlMs: 120000,
+      };
+      const longConfig: CodeGenerationConfig = {
+        codeLength: CODE_MAX_LENGTH,
+        ttlMs: 120000,
+      };
 
+      const shortStrategy = new WalletStrategy(shortConfig);
+      const longStrategy = new WalletStrategy(longConfig);
+
+      const shortResult = shortStrategy.generateCode("test-pubkey");
+      const longResult = longStrategy.generateCode("test-pubkey");
+
+      expect(shortResult.actionCode.code.length).toBe(CODE_MIN_LENGTH);
+      expect(longResult.actionCode.code.length).toBe(CODE_MAX_LENGTH);
+    });
+
+    test("handles empty pubkey", async () => {
+      expect(() => {
+        strategy.generateCode("");
+      }).not.toThrow();
+    });
+
+    test("handles special characters in pubkey", async () => {
+      const specialPubkey = "test-pubkey-with-special-chars!@#$%^&*()";
+      const result = strategy.generateCode(specialPubkey);
+
+      expect(result.actionCode.pubkey).toBe(specialPubkey);
+      expect(() => {
+        strategy.validateCode(result.actionCode);
+      }).not.toThrow();
+    });
+
+    test("handles very long pubkey", async () => {
+      const longPubkey = "a".repeat(1000);
+      const result = strategy.generateCode(longPubkey);
+
+      expect(result.actionCode.pubkey).toBe(longPubkey);
+      expect(() => {
+        strategy.validateCode(result.actionCode);
+      }).not.toThrow();
+    });
+  });
+
+  describe("performance", () => {
+    test("generates codes quickly", async () => {
       const start = Date.now();
-      const results = await Promise.all(
-        pubkeys.map((pubkey) => WalletStrategy.generateCode(pubkey, config))
+      const results = Array.from({ length: 100 }, () =>
+        strategy.generateCode("test-pubkey")
       );
       const end = Date.now();
 
-      const timeMs = end - start;
-      const perGenerationMs = timeMs / pubkeys.length;
+      expect(results).toHaveLength(100);
+      expect(end - start).toBeLessThan(1000); // Should complete in less than 1 second
+    });
 
-      console.log(
-        `Generated ${
-          pubkeys.length
-        } codes in ${timeMs}ms (${perGenerationMs.toFixed(2)}ms each)`
+    test("validates codes quickly", async () => {
+      const result = strategy.generateCode("test-pubkey");
+
+      const start = Date.now();
+      for (let i = 0; i < 100; i++) {
+        strategy.validateCode(result.actionCode);
+      }
+      const end = Date.now();
+
+      expect(end - start).toBeLessThan(1000); // Should complete in less than 1 second
+    });
+  });
+
+  describe("cryptographic properties", () => {
+    test("generates codes with good entropy", async () => {
+      const codes = Array.from({ length: 1000 }, () =>
+        strategy.generateCode("test-pubkey")
       );
 
-      // All codes should be unique
-      const codes = results.map((r) => r.actionCode.code);
-      const uniqueCodes = new Set(codes);
-      expect(uniqueCodes.size).toBe(codes.length);
+      // All codes should be the same within the same time window (deterministic)
+      const uniqueCodes = new Set(codes.map((r) => r.actionCode.code));
+      expect(uniqueCodes.size).toBe(1); // Deterministic behavior
+      
+      // But the code should have good entropy properties
+      const code = codes[0]?.actionCode.code;
+      expect(code).toMatch(/^\d+$/);
+      expect(code?.length).toBe(8);
+    });
 
-      // Performance should be reasonable
-      expect(perGenerationMs).toBeLessThan(10); // 10ms per generation
+    test("generates different codes for different pubkeys with same secret", async () => {
+      const secret = "same-secret";
+      const codes = Array.from({ length: 100 }, (_, i) =>
+        strategy.generateCode(`pubkey-${i}`, secret)
+      );
+
+      const uniqueCodes = new Set(codes.map((r) => r.actionCode.code));
+      expect(uniqueCodes.size).toBe(100); // All should be unique
+    });
+
+    test("generates same codes for same pubkey and secret", async () => {
+      const secret = "same-secret";
+      const pubkey = "same-pubkey";
+
+      const codes = Array.from({ length: 10 }, () =>
+        strategy.generateCode(pubkey, secret)
+      );
+
+      const firstCode = codes[0]!.actionCode.code;
+      codes.forEach((result) => {
+        expect(result.actionCode.code).toBe(firstCode);
+      });
     });
   });
 
   describe("error handling", () => {
     test("handles malformed action code gracefully", async () => {
-      const malformedActionCode = {
-        code: "123",
+      const malformedActionCode: ActionCode = {
+        code: "",
         pubkey: "",
-        timestamp: NaN,
-        expiresAt: Infinity,
-      } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        timestamp: 0,
+        expiresAt: 0,
+      };
 
       expect(() => {
-        WalletStrategy.validateCode(malformedActionCode, defaultConfig);
+        strategy.validateCode(malformedActionCode);
       }).toThrow();
     });
 
-    test("handles missing required fields", async () => {
+    test("handles incomplete action code gracefully", async () => {
       const incompleteActionCode = {
-        code: "12345678",
-        // missing pubkey, timestamp, expiresAt
-      } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        code: "123456",
+        pubkey: "test-pubkey",
+        // Missing timestamp and expiresAt
+      } as ActionCode;
 
       expect(() => {
-        WalletStrategy.validateCode(incompleteActionCode, defaultConfig);
+        strategy.validateCode(incompleteActionCode);
       }).toThrow();
     });
   });

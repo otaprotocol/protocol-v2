@@ -8,7 +8,7 @@ import {
   MessageV0,
 } from "@solana/web3.js";
 import { createMemoInstruction, MEMO_PROGRAM_ID } from "@solana/spl-memo";
-import { BaseChainAdapter, type ChainContext } from "./BaseChainAdapter";
+import { BaseChainAdapter, type ChainWalletStrategyContext, type ChainDelegationStrategyContext } from "./BaseChainAdapter";
 import {
   buildProtocolMeta,
   parseProtocolMeta,
@@ -18,6 +18,7 @@ import { codeHash } from "../utils/crypto";
 import type { ActionCode } from "../types";
 import { ProtocolError } from "../errors";
 import { serializeCanonical } from "../utils/canonical";
+import { DelegationStrategy } from "../strategy/DelegationStrategy";
 
 export type SolanaContext = {
   pubkey: string | PublicKey;
@@ -27,7 +28,7 @@ export type SolanaContext = {
 /** Union of supported Solana txn types */
 export type SolanaTransaction = Transaction | VersionedTransaction;
 
-export class SolanaAdapter extends BaseChainAdapter<SolanaContext> {
+export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext> {
   /** Normalize pubkey input to PublicKey */
   private normalizePubkey(input: string | PublicKey): PublicKey {
     if (typeof input === "string") {
@@ -37,12 +38,67 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext> {
   }
 
   /** Verify the signature over canonical message (protocol-level) */
-  verify(context: ChainContext<SolanaContext>): boolean {
+  verifyWithWallet(context: ChainWalletStrategyContext<SolanaContext>): boolean {
     if (context.chain !== "solana") return false;
     if (!context.pubkey || !context.signature || !context.canonicalMessageParts)
       return false;
 
     const message = serializeCanonical(context.canonicalMessageParts);
+
+    let pub: PublicKey;
+    try {
+      pub = this.normalizePubkey(context.pubkey);
+    } catch {
+      return false;
+    }
+
+    let sigBytes: Uint8Array;
+    try {
+      sigBytes = bs58.decode(context.signature);
+    } catch {
+      return false;
+    }
+
+    const pubBytes = pub.toBytes();
+    if (sigBytes.length !== 64) return false;
+    if (pubBytes.length !== 32) return false;
+
+    try {
+      return nacl.sign.detached.verify(message, sigBytes, pubBytes);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Verify delegation certificate signature */
+  verifyWithDelegation(context: ChainDelegationStrategyContext<SolanaContext>): boolean {
+    if (context.chain !== "solana") return false;
+    if (!context.pubkey || !context.signature || !context.certificate)
+      return false;
+
+    const cert = context.certificate;
+
+    // Use strategy for chain-agnostic certificate validation
+    if (!DelegationStrategy.validateCertificateStructure(cert)) {
+      return false;
+    }
+
+    // Check delegator matches the pubkey
+    if (cert.delegator !== context.pubkey) return false;
+
+    // Check chain matches
+    if (cert.chain !== context.chain) return false;
+
+    // Serialize certificate for signature verification (using strategy method)
+    const certWithoutSignature = {
+      version: cert.version,
+      delegator: cert.delegator,
+      issuedAt: cert.issuedAt,
+      expiresAt: cert.expiresAt,
+      nonce: cert.nonce,
+      chain: cert.chain
+    };
+    const message = DelegationStrategy.serializeCertificate(certWithoutSignature);
 
     let pub: PublicKey;
     try {

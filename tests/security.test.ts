@@ -15,7 +15,7 @@ describe("Security Review", () => {
 
   describe("no sensitive data in logs", () => {
     test("ActionCode objects only contain public data", async () => {
-      const { actionCode } = await protocol.generateCode("test-pubkey");
+      const { actionCode } = await protocol.generateCode("wallet", "test-pubkey");
       
       // Verify only public data is present
       expect(actionCode.code).toBeDefined();
@@ -35,7 +35,7 @@ describe("Security Review", () => {
     });
 
     test("canonical messages are safe to serialize", async () => {
-      const { canonicalMessage } = await protocol.generateCode("test-pubkey");
+      const { canonicalMessage } = await protocol.generateCode("wallet", "test-pubkey");
       
       // Canonical message should only contain public data
       const decoded = new TextDecoder().decode(canonicalMessage);
@@ -81,7 +81,10 @@ describe("Security Review", () => {
       const signatureB58 = bs58.encode(signature);
       
       const context = {
-        message,
+        canonicalMessageParts: {
+          pubkey: keypair.publicKey.toString(),
+          windowStart: Date.now(),
+        },
         chain: "solana",
         pubkey: keypair.publicKey.toString(),
         signature: signatureB58,
@@ -93,7 +96,7 @@ describe("Security Review", () => {
       const times: number[] = [];
       for (let i = 0; i < 10; i++) {
         const start = Date.now();
-        adapter.verify(context);
+        adapter.verifyWithWallet(context);
         const end = Date.now();
         times.push(end - start);
       }
@@ -115,7 +118,10 @@ describe("Security Review", () => {
       const signatureB58 = bs58.encode(signature);
       
       const context = {
-        message,
+        canonicalMessageParts: {
+          pubkey: keypair.publicKey.toString(),
+          windowStart: Date.now(),
+        },
         chain: "solana",
         pubkey: keypair.publicKey.toString(), // Different pubkey
         signature: signatureB58,
@@ -127,7 +133,7 @@ describe("Security Review", () => {
       const times: number[] = [];
       for (let i = 0; i < 10; i++) {
         const start = Date.now();
-        adapter.verify(context);
+        adapter.verifyWithWallet(context);
         const end = Date.now();
         times.push(end - start);
       }
@@ -147,15 +153,18 @@ describe("Security Review", () => {
       const adapter = new SolanaAdapter();
       
       const context = {
-        message: new Uint8Array([1, 2, 3, 4]),
+        canonicalMessageParts: {
+          pubkey: "invalid-pubkey-format",
+          windowStart: Date.now(),
+        },
         chain: "solana",
         pubkey: "invalid-pubkey-format",
         signature: "invalid-signature",
       };
       
       // Should return false, not throw
-      expect(() => adapter.verify(context)).not.toThrow();
-      expect(adapter.verify(context)).toBe(false);
+      expect(() => adapter.verifyWithWallet(context)).not.toThrow();
+      expect(adapter.verifyWithWallet(context)).toBe(false);
     });
 
     test("rejects malformed signatures gracefully", () => {
@@ -163,36 +172,42 @@ describe("Security Review", () => {
       const adapter = new SolanaAdapter();
       
       const context = {
-        message: new Uint8Array([1, 2, 3, 4]),
+        canonicalMessageParts: {
+          pubkey: keypair.publicKey.toString(),
+          windowStart: Date.now(),
+        },
         chain: "solana",
         pubkey: keypair.publicKey.toString(),
         signature: "invalid-base58-signature",
       };
       
       // Should return false, not throw
-      expect(() => adapter.verify(context)).not.toThrow();
-      expect(adapter.verify(context)).toBe(false);
+      expect(() => adapter.verifyWithWallet(context)).not.toThrow();
+      expect(adapter.verifyWithWallet(context)).toBe(false);
     });
 
     test("handles empty or null inputs safely", () => {
       const adapter = new SolanaAdapter();
       
       const context = {
-        message: new Uint8Array([1, 2, 3, 4]),
+        canonicalMessageParts: {
+          pubkey: "",
+          windowStart: Date.now(),
+        },
         chain: "solana",
         pubkey: "",
         signature: "",
       };
       
       // Should return false, not throw
-      expect(() => adapter.verify(context)).not.toThrow();
-      expect(adapter.verify(context)).toBe(false);
+      expect(() => adapter.verifyWithWallet(context)).not.toThrow();
+      expect(adapter.verifyWithWallet(context)).toBe(false);
     });
   });
 
   describe("memory safety", () => {
     test("does not retain sensitive data in memory", async () => {
-      const { actionCode } = await protocol.generateCode("test-pubkey");
+      const { actionCode } = await protocol.generateCode("wallet", "test-pubkey");
       
       // Force garbage collection if available
       if (global.gc) {

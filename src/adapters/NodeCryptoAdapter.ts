@@ -1,7 +1,7 @@
 // !! this is only for demonstration purposes, do not use in production
 // this shouldnt be exported from the package
 import { createSign, createVerify, createPublicKey, generateKeyPairSync, KeyObject } from "crypto";
-import { BaseChainAdapter, type ChainContext } from "./BaseChainAdapter";
+import { BaseChainAdapter, type ChainWalletStrategyContext, type ChainDelegationStrategyContext } from "./BaseChainAdapter";
 import {
   buildProtocolMeta,
   parseProtocolMeta,
@@ -17,9 +17,9 @@ export type NodeCryptoContext = {
   signature: string; // Base64 encoded signature
 };
 
-export class NodeCryptoAdapter extends BaseChainAdapter<NodeCryptoContext> {
+export class NodeCryptoAdapter extends BaseChainAdapter<NodeCryptoContext, NodeCryptoContext> {
   /** Verify the signature over canonical message using Node.js crypto */
-  verify(context: ChainContext<NodeCryptoContext>): boolean {
+  verifyWithWallet(context: ChainWalletStrategyContext<NodeCryptoContext>): boolean {
     if (context.chain !== "nodecrypto") return false;
     if (!context.pubkey || !context.signature || !context.canonicalMessageParts) return false;
 
@@ -40,6 +40,13 @@ export class NodeCryptoAdapter extends BaseChainAdapter<NodeCryptoContext> {
       // Invalid public key format or signature
       return false;
     }
+  }
+
+  /** Verify delegation certificate signature */
+  verifyWithDelegation(_context: ChainDelegationStrategyContext<NodeCryptoContext>): boolean {
+    // For now, just return true as this is a demo adapter
+    // In a real implementation, this would verify the certificate signature
+    return true;
   }
 
   /** Create a protocol meta instruction for NodeCrypto (simulated) */

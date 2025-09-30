@@ -1,7 +1,7 @@
 import type {
   ActionCode,
   CodeGenerationConfig,
-  CodeGenerationResult,
+  WalletStrategyCodeGenerationResult,
 } from "../types";
 import { sha256, hmacSha256, truncateBits, digestToDigits } from "../utils/crypto";
 import { CODE_MAX_LENGTH, CODE_MIN_LENGTH } from "../constants";
@@ -9,12 +9,13 @@ import { serializeCanonical } from "../utils/canonical";
 import { ProtocolError } from "../errors";
 
 export class WalletStrategy {
-  static generateCode(
+  constructor(private config: CodeGenerationConfig) {}
+
+  generateCode(
     pubkey: string,
-    config: CodeGenerationConfig,
     providedSecret?: string,
-  ): CodeGenerationResult {
-    const windowStart = alignToWindow(Date.now(), config.ttlMs);
+  ): WalletStrategyCodeGenerationResult {
+    const windowStart = alignToWindow(Date.now(), this.config.ttlMs);
     
     // Only use secret if explicitly provided
     const secret = providedSecret;
@@ -28,7 +29,7 @@ export class WalletStrategy {
     
     const clamped = Math.max(
       CODE_MIN_LENGTH,
-      Math.min(CODE_MAX_LENGTH, config.codeLength)
+      Math.min(CODE_MAX_LENGTH, this.config.codeLength)
     );
     const truncated = truncateBits(digest, 8 * Math.ceil(clamped / 2));
     const code = digestToDigits(truncated, clamped);
@@ -37,7 +38,7 @@ export class WalletStrategy {
       code,
       pubkey,
       timestamp: windowStart,
-      expiresAt: windowStart + config.ttlMs,
+      expiresAt: windowStart + this.config.ttlMs,
       // Only include secret if provided
       ...(secret && { secret }),
     };
@@ -45,12 +46,9 @@ export class WalletStrategy {
     return { actionCode, canonicalMessage: canonical };
   }
 
-  static validateCode(
-    actionCode: ActionCode,
-    config: CodeGenerationConfig
-  ): void {
+  validateCode(actionCode: ActionCode): void {
     const currentTime = Date.now();
-    if (currentTime > actionCode.expiresAt + (config.clockSkewMs ?? 0)) {
+    if (currentTime > actionCode.expiresAt + (this.config.clockSkewMs ?? 0)) {
       throw ProtocolError.expiredCode(actionCode.code, actionCode.expiresAt, currentTime);
     }
     
@@ -67,7 +65,7 @@ export class WalletStrategy {
     
     const clamped = Math.max(
       CODE_MIN_LENGTH,
-      Math.min(CODE_MAX_LENGTH, config.codeLength)
+      Math.min(CODE_MAX_LENGTH, this.config.codeLength)
     );
     const truncated = truncateBits(digest, 8 * Math.ceil(clamped / 2));
     const expected = digestToDigits(truncated, clamped);

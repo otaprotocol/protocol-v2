@@ -8,7 +8,10 @@ import {
   codeHash,
 } from "../src/utils/crypto";
 import { CODE_MIN_LENGTH, CODE_MAX_LENGTH } from "../src/constants";
-import type { CodeGenerationConfig } from "../src/types";
+import type {
+  CodeGenerationConfig,
+  WalletStrategyCodeGenerationResult,
+} from "../src/types";
 import { createHash, createHmac } from "node:crypto";
 
 describe("Cross-System Compatibility", () => {
@@ -16,6 +19,12 @@ describe("Cross-System Compatibility", () => {
     codeLength: 8,
     ttlMs: 120000, // 2 minutes
   };
+
+  let strategy: WalletStrategy;
+
+  beforeEach(() => {
+    strategy = new WalletStrategy(testConfig);
+  });
 
   describe("Canonical Message Format", () => {
     test("canonical message format matches expected JSON structure", () => {
@@ -211,7 +220,8 @@ describe("Cross-System Compatibility", () => {
 
       for (const length of supportedLengths) {
         const config = { ...testConfig, codeLength: length };
-        const result = WalletStrategy.generateCode(pubkey, config);
+        const testStrategy = new WalletStrategy(config);
+        const result = testStrategy.generateCode(pubkey);
 
         expect(result.actionCode.code).toHaveLength(length);
         expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -222,11 +232,11 @@ describe("Cross-System Compatibility", () => {
     test("generates unique codes for different lengths", () => {
       const lengths = [6, 8, 12, 16];
       const pubkey = "test-pubkey-unique";
-      const results = [];
-
+      const results: WalletStrategyCodeGenerationResult[] = [];
       for (const length of lengths) {
         const config = { ...testConfig, codeLength: length };
-        results.push(WalletStrategy.generateCode(pubkey, config));
+        const strategy = new WalletStrategy(config);
+        results.push(strategy.generateCode(pubkey));
       }
 
       // All codes should be different (different lengths)
@@ -252,7 +262,8 @@ describe("Cross-System Compatibility", () => {
 
       for (const testCase of edgeLengths) {
         const config = { ...testConfig, codeLength: testCase.input };
-        const result = WalletStrategy.generateCode("test-pubkey", config);
+        const testStrategy = new WalletStrategy(config);
+        const result = testStrategy.generateCode("test-pubkey");
 
         expect(result.actionCode.code).toHaveLength(testCase.expected);
         expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -262,12 +273,13 @@ describe("Cross-System Compatibility", () => {
     test("code uniqueness across different lengths and pubkeys", () => {
       const lengths = [6, 8, 12, 16, 20, 24];
       const pubkeys = ["pubkey1", "pubkey2", "pubkey3", "pubkey4", "pubkey5"];
-      const allCodes = [];
+      const allCodes: string[] = [];
 
       for (const length of lengths) {
         for (const pubkey of pubkeys) {
           const config = { ...testConfig, codeLength: length };
-          const result = WalletStrategy.generateCode(pubkey, config);
+          const testStrategy = new WalletStrategy(config);
+          const result = testStrategy.generateCode(pubkey);
           allCodes.push(result.actionCode.code);
         }
       }
@@ -292,11 +304,9 @@ describe("Cross-System Compatibility", () => {
       ];
 
       for (const testCase of testCases) {
-        const results = [];
+        const results: WalletStrategyCodeGenerationResult[] = [];
         for (let i = 0; i < 10; i++) {
-          results.push(
-            WalletStrategy.generateCode(testCase.pubkey, testCase.config)
-          );
+          results.push(strategy.generateCode(testCase.pubkey));
         }
 
         // All results should be identical
@@ -313,11 +323,11 @@ describe("Cross-System Compatibility", () => {
 
     test("generates different codes for different inputs", () => {
       const baseConfig = { codeLength: 8, ttlMs: 120000 };
-      const results = [];
+      const results: WalletStrategyCodeGenerationResult[] = [];
 
       // Different pubkeys
       for (let i = 0; i < 10; i++) {
-        results.push(WalletStrategy.generateCode(`pubkey-${i}`, baseConfig));
+        results.push(strategy.generateCode(`pubkey-${i}`));
       }
 
       // All codes should be different
@@ -338,9 +348,9 @@ describe("Cross-System Compatibility", () => {
       const pubkey = "test-pubkey";
 
       // Generate codes in quick succession - they should all align to the same window
-      const results = [];
+      const results: WalletStrategyCodeGenerationResult[] = [];
       for (let i = 0; i < 5; i++) {
-        results.push(WalletStrategy.generateCode(pubkey, config));
+        results.push(strategy.generateCode(pubkey));
         // Small delay to ensure we're in the same window
         if (i < 4) {
           // Wait a few milliseconds
@@ -414,11 +424,12 @@ describe("Cross-System Compatibility", () => {
           testCase.codeLength
         );
 
-        // Generate code with our implementation
-        const ourResult = WalletStrategy.generateCode(testCase.pubkey, {
+        const strategy = new WalletStrategy({
           codeLength: testCase.codeLength,
           ttlMs: 120000,
         });
+        // Generate code with our implementation
+        const ourResult = strategy.generateCode(testCase.pubkey);
 
         // The codes should be identical for the same timestamp
         // (Note: This will only work if the timestamp aligns to the same window)
@@ -445,11 +456,9 @@ describe("Cross-System Compatibility", () => {
       ];
 
       for (const externalCode of externalCodes) {
+        const strategy = new WalletStrategy(testConfig);
         // Generate our own code for the same input
-        const ourResult = WalletStrategy.generateCode(externalCode.pubkey, {
-          ...testConfig,
-          // Override timestamp to match external system
-        });
+        const ourResult = strategy.generateCode(externalCode.pubkey);
 
         // The external code should validate against our system
         // (This test would need to be updated with actual external codes)
@@ -473,7 +482,7 @@ describe("Cross-System Compatibility", () => {
       ];
 
       for (const edgeCase of edgeCases) {
-        const result = WalletStrategy.generateCode(edgeCase.pubkey, testConfig);
+        const result = strategy.generateCode(edgeCase.pubkey);
 
         expect(result.actionCode.code).toMatch(/^\d+$/);
         expect(result.actionCode.code.length).toBeGreaterThanOrEqual(
@@ -499,9 +508,7 @@ describe("Cross-System Compatibility", () => {
       );
 
       const start = Date.now();
-      const results = pubkeys.map((pubkey) =>
-        WalletStrategy.generateCode(pubkey, testConfig)
-      );
+      const results = pubkeys.map((pubkey) => strategy.generateCode(pubkey));
       const end = Date.now();
 
       const timeMs = end - start;
@@ -532,13 +539,13 @@ describe("Cross-System Compatibility", () => {
     test("validates codes efficiently for large batches", () => {
       const batchSize = 1000;
       const results = Array.from({ length: batchSize }, (_, i) =>
-        WalletStrategy.generateCode(`pubkey-${i}`, testConfig)
+        strategy.generateCode(`pubkey-${i}`)
       );
 
       const start = Date.now();
       for (const result of results) {
         expect(() => {
-          WalletStrategy.validateCode(result.actionCode, testConfig);
+          strategy.validateCode(result.actionCode);
         }).not.toThrow();
       }
       const end = Date.now();
@@ -572,7 +579,7 @@ describe("Cross-System Compatibility", () => {
         // Some inputs might not throw immediately but could cause issues later
         // Let's test that the function either throws or produces a valid result
         try {
-          const result = WalletStrategy.generateCode(
+          const result = strategy.generateCode(
             input.pubkey,
             input.config
           );
@@ -598,7 +605,7 @@ describe("Cross-System Compatibility", () => {
 
       for (const timestamp of extremeTimestamps) {
         // This should not throw, but the timestamp will be aligned to window
-        const result = WalletStrategy.generateCode("test-pubkey", testConfig);
+        const result = strategy.generateCode("test-pubkey");
         expect(result.actionCode.timestamp).toBeDefined();
         expect(result.actionCode.expiresAt).toBeDefined();
         expect(result.actionCode.code).toMatch(/^\d+$/);

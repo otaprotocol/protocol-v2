@@ -1,6 +1,8 @@
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
+import type { DelegationCertificate } from "../types";
+import { DelegationStrategy } from "../strategy/DelegationStrategy";
 
 function toBytes(input: Uint8Array | string): Uint8Array {
   if (typeof input === "string") return new TextEncoder().encode(input);
@@ -104,3 +106,11 @@ export function generateRandomSecret(): string {
   crypto.getRandomValues(randomBytes);
   return btoa(String.fromCharCode(...randomBytes));
 }
+
+// Generate a nonce for delegation certificates
+export function generateNonce(): string {
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+  return btoa(String.fromCharCode(...randomBytes));
+}
+

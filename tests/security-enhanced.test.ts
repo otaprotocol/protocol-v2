@@ -2,35 +2,35 @@ import { ActionCodesProtocol } from "../src/ActionCodesProtocol";
 import { WalletStrategy } from "../src/strategy/WalletStrategy";
 import { generateRandomSecret, hmacSha256, sha256 } from "../src/utils/crypto";
 import { serializeCanonical } from "../src/utils/canonical";
+import type { CodeGenerationConfig } from "../src/types";
 
 describe("Enhanced Security - Brute Force Resistance", () => {
   let protocol: ActionCodesProtocol;
+  const config: CodeGenerationConfig = {
+    codeLength: 8,
+    ttlMs: 120000, // 2 minutes
+  };
 
   beforeEach(() => {
-    protocol = new ActionCodesProtocol({
-      codeLength: 8,
-      ttlMs: 120000, // 2 minutes
-    });
+    protocol = new ActionCodesProtocol(config);
   });
 
   describe("Secret-based Code Generation", () => {
+    const strategy = new WalletStrategy({
+      codeLength: 8,
+      ttlMs: 120000,
+    });
+
     test("generates different codes with and without secrets", () => {
       const pubkey = "test-pubkey-security";
       const secret = generateRandomSecret();
       const salt = "test-salt";
 
       // Generate without secret
-      const withoutSecret = WalletStrategy.generateCode(pubkey, {
-        codeLength: 8,
-        ttlMs: 120000,
-      });
+      const withoutSecret = strategy.generateCode(pubkey);
 
       // Generate with secret
-      const withSecret = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret
-      );
+      const withSecret = strategy.generateCode(pubkey, secret);
 
       // Codes should be different
       expect(withoutSecret.actionCode.code).not.toBe(
@@ -45,16 +45,8 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret = generateRandomSecret();
       const salt = "test-salt";
 
-      const result1 = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret
-      );
-      const result2 = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret
-      );
+      const result1 = strategy.generateCode(pubkey, secret);
+      const result2 = strategy.generateCode(pubkey, secret);
 
       // Should be identical
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
@@ -68,16 +60,8 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret2 = generateRandomSecret();
       const salt = "test-salt";
 
-      const result1 = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret1
-      );
-      const result2 = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret2
-      );
+      const result1 = strategy.generateCode(pubkey, secret1);
+      const result2 = strategy.generateCode(pubkey, secret2);
 
       // Should be different
       expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
@@ -127,14 +111,15 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret = generateRandomSecret();
 
       const lengths = [6, 8, 12, 16, 20, 24];
-      const results = [];
+      const results: { length: number; code: string }[] = [];
 
       for (const length of lengths) {
-        const result = WalletStrategy.generateCode(
-          pubkey,
-          { codeLength: length, ttlMs: 120000 },
-          secret
-        );
+        const strategy = new WalletStrategy({
+          codeLength: length,
+          ttlMs: 120000,
+        });
+
+        const result = strategy.generateCode(pubkey, secret);
         results.push({ length, code: result.actionCode.code });
       }
 
@@ -194,11 +179,10 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const pubkey = "test-pubkey-rate-limit";
       const secret = generateRandomSecret();
       const salt = "test-salt";
-      const validCode = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret
-      );
+      const validCode = new WalletStrategy({
+        codeLength: 8,
+        ttlMs: 120000,
+      }).generateCode(pubkey, secret);
 
       // Simulate rate limiting: 10 attempts per minute
       const maxAttempts = 10;
@@ -236,7 +220,8 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       };
 
       // Simulate multiple attempts
-      const results = [];
+      const results: { success: boolean; reason?: string; attempts: number }[] =
+        [];
       for (let i = 0; i < 50; i++) {
         results.push(attemptBruteForce());
       }
@@ -261,30 +246,22 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const pubkey = "test-pubkey-secret-security";
       const salt = "test-salt";
 
-      // Generate codes with and without secret
-      const withoutSecret = WalletStrategy.generateCode(pubkey, {
+      const strategy = new WalletStrategy({
         codeLength: 8,
         ttlMs: 120000,
       });
-      const withSecret = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        generateRandomSecret()
-      );
+
+      // Generate codes with and without secret
+      const withoutSecret = strategy.generateCode(pubkey);
+      const withSecret = strategy.generateCode(pubkey, generateRandomSecret());
 
       // Both should validate correctly
       expect(() => {
-        WalletStrategy.validateCode(withoutSecret.actionCode, {
-          codeLength: 8,
-          ttlMs: 120000,
-        });
+        strategy.validateCode(withoutSecret.actionCode);
       }).not.toThrow();
 
       expect(() => {
-        WalletStrategy.validateCode(withSecret.actionCode, {
-          codeLength: 8,
-          ttlMs: 120000,
-        });
+        strategy.validateCode(withSecret.actionCode);
       }).not.toThrow();
 
       // Secret-based code should be different and unpredictable
@@ -301,12 +278,13 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret = generateRandomSecret();
       const salt = "test-salt";
 
+      const strategy = new WalletStrategy({
+        codeLength: 8,
+        ttlMs: 120000,
+      });
+
       // Test minimum recommended length (8 digits)
-      const result = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret
-      );
+      const result = strategy.generateCode(pubkey, secret);
 
       expect(result.actionCode.code).toHaveLength(8);
       expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -321,16 +299,19 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret = generateRandomSecret();
       const salt = "test-salt";
 
-      const shortCode = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 6, ttlMs: 120000 },
-        secret
-      );
-      const longCode = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 12, ttlMs: 120000 },
-        secret
-      );
+      const strategy = new WalletStrategy({
+        codeLength: 6,
+        ttlMs: 120000,
+      });
+
+      const shortCode = strategy.generateCode(pubkey, secret);
+
+      const longStrategy = new WalletStrategy({
+        codeLength: 12,
+        ttlMs: 120000,
+      });
+
+      const longCode = longStrategy.generateCode(pubkey, secret);
 
       expect(shortCode.actionCode.code).toHaveLength(6);
       expect(longCode.actionCode.code).toHaveLength(12);
@@ -348,11 +329,12 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret = generateRandomSecret();
       const salt = "test-salt";
 
-      const result = WalletStrategy.generateCode(
-        pubkey,
-        { codeLength: 8, ttlMs: 120000 },
-        secret
-      );
+      const strategy = new WalletStrategy({
+        codeLength: 8,
+        ttlMs: 120000,
+      });
+
+      const result = strategy.generateCode(pubkey, secret);
 
       // Code should expire in 2 minutes
       expect(result.actionCode.expiresAt - result.actionCode.timestamp).toBe(

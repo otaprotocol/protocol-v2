@@ -44,7 +44,7 @@ describe("SolanaAdapter", () => {
         canonicalMessageParts,
       };
 
-      const result = adapter.verify(context);
+      const result = adapter.verifyWithWallet(context);
       expect(result).toBe(true);
     });
 
@@ -65,7 +65,7 @@ describe("SolanaAdapter", () => {
         canonicalMessageParts,
       };
 
-      const result = adapter.verify(context);
+      const result = adapter.verifyWithWallet(context);
       expect(result).toBe(false);
     });
 
@@ -85,7 +85,7 @@ describe("SolanaAdapter", () => {
         signature: signatureB58,
         canonicalMessageParts,
       };
-      expect(adapter.verify(context1)).toBe(true);
+      expect(adapter.verifyWithWallet(context1)).toBe(true);
 
       // Test with base58 string
       const context2: ChainContext<SolanaContext> = {
@@ -94,7 +94,7 @@ describe("SolanaAdapter", () => {
         signature: signatureB58,
         canonicalMessageParts,
       };
-      expect(adapter.verify(context2)).toBe(true);
+      expect(adapter.verifyWithWallet(context2)).toBe(true);
     });
   });
 
@@ -476,7 +476,7 @@ describe("SolanaAdapter", () => {
       };
 
       // Verify the signature
-      const verifyResult = adapter.verify(context);
+      const verifyResult = adapter.verifyWithWallet(context);
       expect(verifyResult).toBe(true);
 
       // Note: Protocol meta validation is now handled by transaction inspection
@@ -510,7 +510,7 @@ describe("SolanaAdapter", () => {
       for (const batchSize of batchSizes) {
         const start = Date.now();
         const batchResults = Array.from({ length: batchSize }, () =>
-          adapter.verify(context)
+          adapter.verifyWithWallet(context)
         );
         const end = Date.now();
 
