@@ -1,5 +1,6 @@
 import { WalletStrategy } from "./WalletStrategy";
 import { generateNonce, sha256 } from "../utils/crypto";
+import { serializeCanonical } from "../utils/canonical";
 import type {
   DelegationCertificate,
   DelegatedActionCode,
@@ -9,8 +10,10 @@ import type {
 
 export class DelegationStrategy {
   private walletStrategy: WalletStrategy;
+  private config: CodeGenerationConfig;
 
   constructor(config: CodeGenerationConfig) {
+    this.config = config;
     this.walletStrategy = new WalletStrategy(config);
   }
 
@@ -41,7 +44,8 @@ export class DelegationStrategy {
   generateDelegatedCode(
     certificate: DelegationCertificate
   ): DelegationStrategyCodeGenerationResult {
-    // Validate certificate
+    // Validate certificate format and expiration only
+    // Signature verification happens in ActionCodesProtocol.validateCode()
     if (!this.validateCertificate(certificate)) {
       throw new Error("Invalid delegation certificate");
     }
@@ -49,9 +53,18 @@ export class DelegationStrategy {
     // Use certificate as the secret for deterministic generation
     const certificateSecret = DelegationStrategy.hashCertificate(certificate);
 
-    // Generate code using existing WalletStrategy
+    // Generate canonical message for delegation
+    const windowStart = Math.floor(Date.now() / this.config.ttlMs) * this.config.ttlMs;
+    const canonicalMessage = serializeCanonical({ 
+      pubkey: certificate.delegator, 
+      windowStart, 
+      secret: certificateSecret 
+    });
+
+    // Generate code using existing WalletStrategy with canonical message
     const result = this.walletStrategy.generateCode(
-      certificate.delegator,
+      canonicalMessage,
+      "", // No signature for delegation (uses secret instead)
       certificateSecret // Use certificate hash as secret
     );
 
@@ -145,10 +158,19 @@ export class DelegationStrategy {
 
   /**
    * Hash a delegation certificate to create a unique ID (chain-agnostic)
+   * Includes signature to prevent relayer from generating codes
    */
   static hashCertificate(cert: DelegationCertificate): string {
+    // Include signature in hash to prevent relayer code generation
     const serialized = this.serializeCertificate(cert);
-    const hash = sha256(serialized);
+    const signatureBytes = new TextEncoder().encode(cert.signature);
+    
+    // Combine certificate data with signature
+    const combined = new Uint8Array(serialized.length + signatureBytes.length);
+    combined.set(serialized, 0);
+    combined.set(signatureBytes, serialized.length);
+    
+    const hash = sha256(combined);
     return Array.from(hash)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");

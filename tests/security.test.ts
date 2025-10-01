@@ -15,7 +15,9 @@ describe("Security Review", () => {
 
   describe("no sensitive data in logs", () => {
     test("ActionCode objects only contain public data", async () => {
-      const { actionCode } = await protocol.generateCode("wallet", "test-pubkey");
+      const canonicalMessage = protocol.getCanonicalMessageParts("test-pubkey");
+      const signature = "test-signature";
+      const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
       // Verify only public data is present
       expect(actionCode.code).toBeDefined();
@@ -23,8 +25,8 @@ describe("Security Review", () => {
       expect(actionCode.timestamp).toBeDefined();
       expect(actionCode.expiresAt).toBeDefined();
       
-      // No private keys or secrets should be present
-      expect(actionCode.signature).toBeUndefined();
+      // Signature is now included but it's safe to log (it's the user's signature)
+      expect(actionCode.signature).toBe(signature);
       expect(actionCode.secretHint).toBeUndefined();
       
       // Verify the code is deterministic and safe to log
@@ -35,7 +37,9 @@ describe("Security Review", () => {
     });
 
     test("canonical messages are safe to serialize", async () => {
-      const { canonicalMessage } = await protocol.generateCode("wallet", "test-pubkey");
+      const canonicalMessage = protocol.getCanonicalMessageParts("test-pubkey");
+      const signature = "test-signature";
+      const { canonicalMessage: generatedMessage } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
       // Canonical message should only contain public data
       const decoded = new TextDecoder().decode(canonicalMessage);
@@ -207,7 +211,9 @@ describe("Security Review", () => {
 
   describe("memory safety", () => {
     test("does not retain sensitive data in memory", async () => {
-      const { actionCode } = await protocol.generateCode("wallet", "test-pubkey");
+      const canonicalMessage = protocol.getCanonicalMessageParts("test-pubkey");
+      const signature = "test-signature";
+      const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
       // Force garbage collection if available
       if (global.gc) {

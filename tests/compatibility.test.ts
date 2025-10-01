@@ -14,6 +14,12 @@ import type {
 } from "../src/types";
 import { createHash, createHmac } from "node:crypto";
 
+// Helper function to create canonical message for testing
+function createCanonicalMessage(pubkey: string, secret?: string): Uint8Array {
+  const windowStart = Math.floor(Date.now() / 120000) * 120000; // 2 minute TTL
+  return serializeCanonical({ pubkey, windowStart, secret });
+}
+
 describe("Cross-System Compatibility", () => {
   const testConfig: CodeGenerationConfig = {
     codeLength: 8,
@@ -221,7 +227,8 @@ describe("Cross-System Compatibility", () => {
       for (const length of supportedLengths) {
         const config = { ...testConfig, codeLength: length };
         const testStrategy = new WalletStrategy(config);
-        const result = testStrategy.generateCode(pubkey);
+        const canonicalMessage = createCanonicalMessage(pubkey);
+        const result = testStrategy.generateCode(canonicalMessage, "test-signature");
 
         expect(result.actionCode.code).toHaveLength(length);
         expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -236,7 +243,8 @@ describe("Cross-System Compatibility", () => {
       for (const length of lengths) {
         const config = { ...testConfig, codeLength: length };
         const strategy = new WalletStrategy(config);
-        results.push(strategy.generateCode(pubkey));
+        const canonicalMessage = createCanonicalMessage(pubkey);
+        results.push(strategy.generateCode(canonicalMessage, "test-signature"));
       }
 
       // All codes should be different (different lengths)
@@ -263,7 +271,8 @@ describe("Cross-System Compatibility", () => {
       for (const testCase of edgeLengths) {
         const config = { ...testConfig, codeLength: testCase.input };
         const testStrategy = new WalletStrategy(config);
-        const result = testStrategy.generateCode("test-pubkey");
+        const canonicalMessage = createCanonicalMessage("test-pubkey");
+        const result = testStrategy.generateCode(canonicalMessage, "test-signature");
 
         expect(result.actionCode.code).toHaveLength(testCase.expected);
         expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -279,7 +288,8 @@ describe("Cross-System Compatibility", () => {
         for (const pubkey of pubkeys) {
           const config = { ...testConfig, codeLength: length };
           const testStrategy = new WalletStrategy(config);
-          const result = testStrategy.generateCode(pubkey);
+          const canonicalMessage = createCanonicalMessage(pubkey);
+          const result = testStrategy.generateCode(canonicalMessage, "test-signature");
           allCodes.push(result.actionCode.code);
         }
       }
@@ -306,7 +316,8 @@ describe("Cross-System Compatibility", () => {
       for (const testCase of testCases) {
         const results: WalletStrategyCodeGenerationResult[] = [];
         for (let i = 0; i < 10; i++) {
-          results.push(strategy.generateCode(testCase.pubkey));
+          const canonicalMessage = createCanonicalMessage(testCase.pubkey);
+          results.push(strategy.generateCode(canonicalMessage, "test-signature"));
         }
 
         // All results should be identical
@@ -327,7 +338,8 @@ describe("Cross-System Compatibility", () => {
 
       // Different pubkeys
       for (let i = 0; i < 10; i++) {
-        results.push(strategy.generateCode(`pubkey-${i}`));
+        const canonicalMessage = createCanonicalMessage(`pubkey-${i}`);
+        results.push(strategy.generateCode(canonicalMessage, "test-signature"));
       }
 
       // All codes should be different
@@ -350,7 +362,8 @@ describe("Cross-System Compatibility", () => {
       // Generate codes in quick succession - they should all align to the same window
       const results: WalletStrategyCodeGenerationResult[] = [];
       for (let i = 0; i < 5; i++) {
-        results.push(strategy.generateCode(pubkey));
+        const canonicalMessage = createCanonicalMessage(pubkey);
+        results.push(strategy.generateCode(canonicalMessage, "test-signature"));
         // Small delay to ensure we're in the same window
         if (i < 4) {
           // Wait a few milliseconds
@@ -429,7 +442,8 @@ describe("Cross-System Compatibility", () => {
           ttlMs: 120000,
         });
         // Generate code with our implementation
-        const ourResult = strategy.generateCode(testCase.pubkey);
+        const canonicalMessage = createCanonicalMessage(testCase.pubkey);
+        const ourResult = strategy.generateCode(canonicalMessage, "test-signature");
 
         // The codes should be identical for the same timestamp
         // (Note: This will only work if the timestamp aligns to the same window)
@@ -458,7 +472,8 @@ describe("Cross-System Compatibility", () => {
       for (const externalCode of externalCodes) {
         const strategy = new WalletStrategy(testConfig);
         // Generate our own code for the same input
-        const ourResult = strategy.generateCode(externalCode.pubkey);
+        const canonicalMessage = createCanonicalMessage(externalCode.pubkey);
+        const ourResult = strategy.generateCode(canonicalMessage, "test-signature");
 
         // The external code should validate against our system
         // (This test would need to be updated with actual external codes)
@@ -482,7 +497,8 @@ describe("Cross-System Compatibility", () => {
       ];
 
       for (const edgeCase of edgeCases) {
-        const result = strategy.generateCode(edgeCase.pubkey);
+        const canonicalMessage = createCanonicalMessage(edgeCase.pubkey);
+        const result = strategy.generateCode(canonicalMessage, "test-signature");
 
         expect(result.actionCode.code).toMatch(/^\d+$/);
         expect(result.actionCode.code.length).toBeGreaterThanOrEqual(
@@ -508,7 +524,10 @@ describe("Cross-System Compatibility", () => {
       );
 
       const start = Date.now();
-      const results = pubkeys.map((pubkey) => strategy.generateCode(pubkey));
+      const results = pubkeys.map((pubkey) => {
+        const canonicalMessage = createCanonicalMessage(pubkey);
+        return strategy.generateCode(canonicalMessage, "test-signature");
+      });
       const end = Date.now();
 
       const timeMs = end - start;
@@ -539,7 +558,10 @@ describe("Cross-System Compatibility", () => {
     test("validates codes efficiently for large batches", () => {
       const batchSize = 1000;
       const results = Array.from({ length: batchSize }, (_, i) =>
-        strategy.generateCode(`pubkey-${i}`)
+        (() => {
+          const canonicalMessage = createCanonicalMessage(`pubkey-${i}`);
+          return strategy.generateCode(canonicalMessage, "test-signature");
+        })()
       );
 
       const start = Date.now();
@@ -579,9 +601,10 @@ describe("Cross-System Compatibility", () => {
         // Some inputs might not throw immediately but could cause issues later
         // Let's test that the function either throws or produces a valid result
         try {
+          const canonicalMessage = createCanonicalMessage(input.pubkey);
           const result = strategy.generateCode(
-            input.pubkey,
-            input.config
+            canonicalMessage,
+            "test-signature"
           );
           // If it doesn't throw, the result should be valid
           expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -605,7 +628,8 @@ describe("Cross-System Compatibility", () => {
 
       for (const timestamp of extremeTimestamps) {
         // This should not throw, but the timestamp will be aligned to window
-        const result = strategy.generateCode("test-pubkey");
+        const canonicalMessage = createCanonicalMessage("test-pubkey");
+        const result = strategy.generateCode(canonicalMessage, "test-signature");
         expect(result.actionCode.timestamp).toBeDefined();
         expect(result.actionCode.expiresAt).toBeDefined();
         expect(result.actionCode.code).toMatch(/^\d+$/);

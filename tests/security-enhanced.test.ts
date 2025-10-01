@@ -4,6 +4,12 @@ import { generateRandomSecret, hmacSha256, sha256 } from "../src/utils/crypto";
 import { serializeCanonical } from "../src/utils/canonical";
 import type { CodeGenerationConfig } from "../src/types";
 
+// Helper function to create canonical message for testing
+function createCanonicalMessage(pubkey: string, secret?: string): Uint8Array {
+  const windowStart = Math.floor(Date.now() / 120000) * 120000; // 2 minute TTL
+  return serializeCanonical({ pubkey, windowStart, secret });
+}
+
 describe("Enhanced Security - Brute Force Resistance", () => {
   let protocol: ActionCodesProtocol;
   const config: CodeGenerationConfig = {
@@ -27,10 +33,12 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const salt = "test-salt";
 
       // Generate without secret
-      const withoutSecret = strategy.generateCode(pubkey);
+      const canonicalMessage1 = createCanonicalMessage(pubkey);
+      const withoutSecret = strategy.generateCode(canonicalMessage1, "test-signature");
 
       // Generate with secret
-      const withSecret = strategy.generateCode(pubkey, secret);
+      const canonicalMessage2 = createCanonicalMessage(pubkey, secret);
+      const withSecret = strategy.generateCode(canonicalMessage2, "test-signature", secret);
 
       // Codes should be different
       expect(withoutSecret.actionCode.code).not.toBe(
@@ -45,8 +53,9 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret = generateRandomSecret();
       const salt = "test-salt";
 
-      const result1 = strategy.generateCode(pubkey, secret);
-      const result2 = strategy.generateCode(pubkey, secret);
+      const canonicalMessage = createCanonicalMessage(pubkey, secret);
+      const result1 = strategy.generateCode(canonicalMessage, "test-signature", secret);
+      const result2 = strategy.generateCode(canonicalMessage, "test-signature", secret);
 
       // Should be identical
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
@@ -60,8 +69,10 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const secret2 = generateRandomSecret();
       const salt = "test-salt";
 
-      const result1 = strategy.generateCode(pubkey, secret1);
-      const result2 = strategy.generateCode(pubkey, secret2);
+      const canonicalMessage1 = createCanonicalMessage(pubkey, secret1);
+      const canonicalMessage2 = createCanonicalMessage(pubkey, secret2);
+      const result1 = strategy.generateCode(canonicalMessage1, "test-signature", secret1);
+      const result2 = strategy.generateCode(canonicalMessage2, "test-signature", secret2);
 
       // Should be different
       expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
@@ -119,7 +130,8 @@ describe("Enhanced Security - Brute Force Resistance", () => {
           ttlMs: 120000,
         });
 
-        const result = strategy.generateCode(pubkey, secret);
+        const canonicalMessage = createCanonicalMessage(pubkey, secret);
+        const result = strategy.generateCode(canonicalMessage, "test-signature", secret);
         results.push({ length, code: result.actionCode.code });
       }
 
@@ -182,7 +194,7 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       const validCode = new WalletStrategy({
         codeLength: 8,
         ttlMs: 120000,
-      }).generateCode(pubkey, secret);
+      }).generateCode(createCanonicalMessage(pubkey, secret), "test-signature", secret);
 
       // Simulate rate limiting: 10 attempts per minute
       const maxAttempts = 10;
@@ -252,8 +264,11 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       });
 
       // Generate codes with and without secret
-      const withoutSecret = strategy.generateCode(pubkey);
-      const withSecret = strategy.generateCode(pubkey, generateRandomSecret());
+      const secret = generateRandomSecret();
+      const canonicalMessage1 = createCanonicalMessage(pubkey);
+      const canonicalMessage2 = createCanonicalMessage(pubkey, secret);
+      const withoutSecret = strategy.generateCode(canonicalMessage1, "test-signature");
+      const withSecret = strategy.generateCode(canonicalMessage2, "test-signature", secret);
 
       // Both should validate correctly
       expect(() => {
@@ -284,7 +299,8 @@ describe("Enhanced Security - Brute Force Resistance", () => {
       });
 
       // Test minimum recommended length (8 digits)
-      const result = strategy.generateCode(pubkey, secret);
+      const canonicalMessage = createCanonicalMessage(pubkey, secret);
+      const result = strategy.generateCode(canonicalMessage, "test-signature", secret);
 
       expect(result.actionCode.code).toHaveLength(8);
       expect(result.actionCode.code).toMatch(/^\d+$/);
@@ -304,14 +320,15 @@ describe("Enhanced Security - Brute Force Resistance", () => {
         ttlMs: 120000,
       });
 
-      const shortCode = strategy.generateCode(pubkey, secret);
+      const canonicalMessage = createCanonicalMessage(pubkey, secret);
+      const shortCode = strategy.generateCode(canonicalMessage, "test-signature", secret);
 
       const longStrategy = new WalletStrategy({
         codeLength: 12,
         ttlMs: 120000,
       });
 
-      const longCode = longStrategy.generateCode(pubkey, secret);
+      const longCode = longStrategy.generateCode(createCanonicalMessage(pubkey, secret), "test-signature", secret);
 
       expect(shortCode.actionCode.code).toHaveLength(6);
       expect(longCode.actionCode.code).toHaveLength(12);
@@ -334,7 +351,8 @@ describe("Enhanced Security - Brute Force Resistance", () => {
         ttlMs: 120000,
       });
 
-      const result = strategy.generateCode(pubkey, secret);
+      const canonicalMessage = createCanonicalMessage(pubkey, secret);
+      const result = strategy.generateCode(canonicalMessage, "test-signature", secret);
 
       // Code should expire in 2 minutes
       expect(result.actionCode.expiresAt - result.actionCode.timestamp).toBe(

@@ -12,6 +12,7 @@ import { DelegationStrategy } from "../src/strategy/DelegationStrategy";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { codeHash } from "../src/utils/crypto";
+import { DelegationCertificate } from "../src/types";
 
 // Helper function to create a real signature for testing
 function createRealSignature(message: Uint8Array, keypair: Keypair): string {
@@ -146,7 +147,9 @@ describe("ActionCodesProtocol", () => {
 
   describe("code generation and validation", () => {
     test("generates and validates codes", async () => {
-      const { actionCode } = await protocol.generateCode('wallet', 'test-pubkey');
+      const canonicalMessage = protocol.getCanonicalMessageParts('test-pubkey');
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+      const { actionCode } = await protocol.generateCode('wallet', canonicalMessage, signature);
 
       expect(actionCode.code).toBeDefined();
       expect(actionCode.pubkey).toBe("test-pubkey");
@@ -155,7 +158,9 @@ describe("ActionCodesProtocol", () => {
     });
 
     test("validates codes with chain adapter", async () => {
-      const { actionCode } = await protocol.generateCode('wallet', 'test-pubkey');
+      const canonicalMessage = protocol.getCanonicalMessageParts('test-pubkey');
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+      const { actionCode } = await protocol.generateCode('wallet', canonicalMessage, signature);
 
       // Mock context for validation
       const context = {
@@ -292,6 +297,135 @@ describe("ActionCodesProtocol", () => {
       expect(() => {
         protocol.generateCode("delegation", expiredCertificate);
       }).toThrow("Invalid delegation certificate");
+    });
+
+    it("should reject codes with stolen signatures during validation", async () => {
+      // 1. Generate valid certificate and code
+      const originalTemplate = await protocol.createDelegationCertificateTemplate(
+        testKeypair.publicKey.toString(),
+        3600000,
+        "solana"
+      );
+      const message = DelegationStrategy.serializeCertificate(originalTemplate);
+      const realSignature = createRealSignature(message, testKeypair);
+      const originalCertificate = {
+        ...originalTemplate,
+        signature: realSignature,
+      };
+      const originalResult = await protocol.generateCode("delegation", originalCertificate);
+      const originalCode = originalResult.actionCode;
+
+      // 2. Create fake certificate with stolen signature but different data
+      const fakeCertificate: DelegationCertificate = {
+        ...originalCertificate,
+        issuedAt: originalCertificate.issuedAt, // Keep same timestamp to avoid expiration issues
+        expiresAt: originalCertificate.expiresAt, // Keep same expiration
+        nonce: "attacker-nonce", // Different nonce
+        signature: originalCertificate.signature // Same signature (stolen)
+      };
+
+      // 3. Generate code with fake certificate (this should work in strategy layer)
+      const fakeResult = await protocol.generateCode("delegation", fakeCertificate);
+      const fakeCode = fakeResult.actionCode;
+
+      // 4. Try to validate fake code with original certificate (should fail)
+      expect(() => {
+        protocol.validateCode("delegation", fakeCode, originalCertificate);
+      }).toThrow("Action code does not match delegation certificate");
+    });
+
+    it("should reject codes with stolen signatures and different delegator during validation", async () => {
+      // 1. Generate valid certificate and code
+      const originalTemplate = await protocol.createDelegationCertificateTemplate(
+        testKeypair.publicKey.toString(),
+        3600000,
+        "solana"
+      );
+      const message = DelegationStrategy.serializeCertificate(originalTemplate);
+      const realSignature = createRealSignature(message, testKeypair);
+      const originalCertificate = {
+        ...originalTemplate,
+        signature: realSignature,
+      };
+      const originalResult = await protocol.generateCode("delegation", originalCertificate);
+      const originalCode = originalResult.actionCode;
+
+      // 2. Create fake certificate with stolen signature but different delegator
+      const fakeCertificate: DelegationCertificate = {
+        ...originalCertificate,
+        delegator: "attacker-pubkey", // Different delegator
+        signature: originalCertificate.signature // Same signature (stolen)
+      };
+
+      // 3. Generate code with fake certificate (this should work in strategy layer)
+      const fakeResult = await protocol.generateCode("delegation", fakeCertificate);
+      const fakeCode = fakeResult.actionCode;
+
+      // 4. Try to validate fake code with original certificate (should fail)
+      expect(() => {
+        protocol.validateCode("delegation", fakeCode, originalCertificate);
+      }).toThrow("Action code does not match delegation certificate");
+    });
+
+    it("should require signature for wallet strategy to prevent public key + timestamp attacks", async () => {
+      // 1. Generate canonical message first
+      const canonicalMessage = protocol.getCanonicalMessageParts(
+        testKeypair.publicKey.toString()
+      );
+
+      // 2. Try to generate code without signature (should fail)
+      expect(() => {
+        protocol.generateCode("wallet", canonicalMessage, "");
+      }).toThrow("Missing signature over canonical message");
+
+      // 3. Sign the canonical message
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+
+      // 4. Generate code with signature (should succeed)
+      const result = protocol.generateCode(
+        "wallet",
+        canonicalMessage,
+        signature
+      );
+
+      expect(result.actionCode.code).toBeDefined();
+      expect(result.actionCode.signature).toBe(signature);
+    });
+
+    it("should prevent public key + timestamp attacks with signature-based generation", async () => {
+      // 1. User generates canonical message and signs it
+      const userPubkey = testKeypair.publicKey.toString();
+      const canonicalMessage = protocol.getCanonicalMessageParts(userPubkey);
+      const userSignature = createRealSignature(canonicalMessage, testKeypair);
+      const userResult = protocol.generateCode("wallet", canonicalMessage, userSignature);
+      const userCode = userResult.actionCode;
+
+      // 2. Attacker tries to generate code with same public key but different signature
+      const attackerSignature = "fake-attacker-signature";
+      const attackerResult = protocol.generateCode("wallet", canonicalMessage, attackerSignature);
+      const attackerCode = attackerResult.actionCode;
+
+      // 3. Codes should be different because they use different signatures
+      expect(userCode.code).not.toBe(attackerCode.code);
+      expect(userCode.signature).toBe(userSignature);
+      expect(attackerCode.signature).toBe(attackerSignature);
+
+      // 4. Only the user's code should validate correctly
+      expect(() => {
+        protocol.validateCode("wallet", userCode, { 
+          chain: "solana",
+          pubkey: userPubkey,
+          signature: userSignature
+        } as unknown as ChainWalletStrategyContext<SolanaContext>);
+      }).not.toThrow();
+
+      expect(() => {
+        protocol.validateCode("wallet", attackerCode, { 
+          chain: "solana",
+          pubkey: userPubkey,
+          signature: attackerSignature
+        } as unknown as ChainWalletStrategyContext<SolanaContext>);
+      }).toThrow("Signature verification failed");
     });
   });
 });

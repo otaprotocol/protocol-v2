@@ -12,20 +12,33 @@ export class WalletStrategy {
   constructor(private config: CodeGenerationConfig) {}
 
   generateCode(
-    pubkey: string,
+    canonicalMessage: Uint8Array,
+    signature: string,
     providedSecret?: string,
   ): WalletStrategyCodeGenerationResult {
-    const windowStart = alignToWindow(Date.now(), this.config.ttlMs);
+    const canonical = canonicalMessage;
+    
+    // Parse pubkey and windowStart from canonical message
+    const decoded = JSON.parse(new TextDecoder().decode(canonical));
+    const pubkey = decoded.pubkey;
+    const windowStart = decoded.windowStart;
     
     // Only use secret if explicitly provided
     const secret = providedSecret;
     
-    const canonical = serializeCanonical({ pubkey, windowStart, secret });
-    
-    // Use HMAC for better security when secret is available
-    const digest = secret ? 
-      hmacSha256(secret, canonical) : 
-      sha256(canonical);
+    // Use signature if provided, otherwise fall back to secret/HMAC
+    let digest: Uint8Array;
+    if (signature) {
+      // Use signature as the primary entropy source
+      const signatureBytes = new TextEncoder().encode(signature);
+      digest = hmacSha256(signatureBytes, canonical);
+    } else if (secret) {
+      // Use secret for HMAC
+      digest = hmacSha256(secret, canonical);
+    } else {
+      // Fall back to SHA256 (less secure)
+      digest = sha256(canonical);
+    }
     
     const clamped = Math.max(
       CODE_MIN_LENGTH,
@@ -39,6 +52,8 @@ export class WalletStrategy {
       pubkey,
       timestamp: windowStart,
       expiresAt: windowStart + this.config.ttlMs,
+      // Include signature if provided
+      ...(signature && { signature }),
       // Only include secret if provided
       ...(secret && { secret }),
     };
@@ -59,9 +74,18 @@ export class WalletStrategy {
     });
     
     // Use same digest method as generation
-    const digest = actionCode.secret ? 
-      hmacSha256(actionCode.secret, canonical) : 
-      sha256(canonical);
+    let digest: Uint8Array;
+    if (actionCode.signature) {
+      // Use signature as the primary entropy source
+      const signatureBytes = new TextEncoder().encode(actionCode.signature);
+      digest = hmacSha256(signatureBytes, canonical);
+    } else if (actionCode.secret) {
+      // Use secret for HMAC
+      digest = hmacSha256(actionCode.secret, canonical);
+    } else {
+      // Fall back to SHA256 (less secure)
+      digest = sha256(canonical);
+    }
     
     const clamped = Math.max(
       CODE_MIN_LENGTH,
@@ -74,8 +98,4 @@ export class WalletStrategy {
       throw ProtocolError.invalidCodeFormat(actionCode.code, "Code does not match expected value");
     }
   }
-}
-
-function alignToWindow(now: number, ttlMs: number): number {
-  return Math.floor(now / ttlMs) * ttlMs;
 }
