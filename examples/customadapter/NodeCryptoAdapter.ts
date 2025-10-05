@@ -1,6 +1,7 @@
 // !! this is only for demonstration purposes, do not use in production
 // this shouldnt be exported from the package
 import { createSign, createVerify, createPublicKey, generateKeyPairSync, KeyObject } from "crypto";
+import bs58 from "bs58";
 import { BaseChainAdapter, type ChainWalletStrategyContext, type ChainDelegationStrategyContext } from "../../src/adapters/BaseChainAdapter";
 import {
   buildProtocolMeta,
@@ -14,7 +15,7 @@ import { ProtocolError } from "../../src/errors";
 
 export type NodeCryptoContext = {
   pubkey: string; // PEM format public key
-  signature: string; // Base64 encoded signature
+  signature: string; // Base58 encoded signature
 };
 
 export class NodeCryptoAdapter extends BaseChainAdapter<NodeCryptoContext, NodeCryptoContext> {
@@ -31,9 +32,13 @@ export class NodeCryptoAdapter extends BaseChainAdapter<NodeCryptoContext, NodeC
       const verifier = createVerify("SHA256");
       verifier.update(canonicalMessage);
       
+      // Convert Base58 signature back to Base64 for verification
+      const signatureBytes = bs58.decode(context.signature);
+      const base64Signature = Buffer.from(signatureBytes).toString('base64');
+      
       // Verify the signature
       const publicKey = createPublicKey(context.pubkey);
-      const isValid = verifier.verify(publicKey, context.signature, "base64");
+      const isValid = verifier.verify(publicKey, base64Signature, "base64");
       
       return isValid;
     } catch {
@@ -183,7 +188,10 @@ export class NodeCryptoAdapter extends BaseChainAdapter<NodeCryptoContext, NodeC
   ): string {
     const signer = createSign("SHA256");
     signer.update(message);
-    return signer.sign(privateKey, "base64");
+    const base64Signature = signer.sign(privateKey, "base64");
+    // Convert Base64 signature to Base58 for consistency with other adapters
+    const signatureBytes = Buffer.from(base64Signature, 'base64');
+    return bs58.encode(signatureBytes);
   }
 
   /**

@@ -82,7 +82,7 @@ describe("ActionCodesProtocol", () => {
         pubkey: "user@example.com",
         timestamp: Date.now(),
         expiresAt: Date.now() + 120000,
-        signature: "test-signature",
+        signature: "testsignature",
       };
 
       const codeHashValue = codeHash(actionCode.code);
@@ -147,26 +147,26 @@ describe("ActionCodesProtocol", () => {
 
   describe("code generation and validation", () => {
     test("generates and validates codes", async () => {
-      const canonicalMessage = protocol.getCanonicalMessageParts('test-pubkey');
+      const canonicalMessage = protocol.getCanonicalMessageParts('testpubkey');
       const signature = createRealSignature(canonicalMessage, testKeypair);
       const { actionCode } = await protocol.generateCode('wallet', canonicalMessage, signature);
 
       expect(actionCode.code).toBeDefined();
-      expect(actionCode.pubkey).toBe("test-pubkey");
+      expect(actionCode.pubkey).toBe("testpubkey");
       expect(actionCode.timestamp).toBeDefined();
       expect(actionCode.expiresAt).toBeDefined();
     });
 
     test("validates codes with chain adapter", async () => {
-      const canonicalMessage = protocol.getCanonicalMessageParts('test-pubkey');
+      const canonicalMessage = protocol.getCanonicalMessageParts('testpubkey');
       const signature = createRealSignature(canonicalMessage, testKeypair);
       const { actionCode } = await protocol.generateCode('wallet', canonicalMessage, signature);
 
       // Mock context for validation
       const context = {
         chain: "solana",
-        pubkey: "test-pubkey",
-        signature: "mock-signature",
+        pubkey: "testpubkey",
+        signature: "mocksignature",
       } as unknown as ChainWalletStrategyContext<SolanaContext>;
 
       // This should throw because we're using a mock signature
@@ -320,7 +320,7 @@ describe("ActionCodesProtocol", () => {
         ...originalCertificate,
         issuedAt: originalCertificate.issuedAt, // Keep same timestamp to avoid expiration issues
         expiresAt: originalCertificate.expiresAt, // Keep same expiration
-        nonce: "attacker-nonce", // Different nonce
+        nonce: "attackernonce", // Different nonce
         signature: originalCertificate.signature // Same signature (stolen)
       };
 
@@ -353,7 +353,7 @@ describe("ActionCodesProtocol", () => {
       // 2. Create fake certificate with stolen signature but different delegator
       const fakeCertificate: DelegationCertificate = {
         ...originalCertificate,
-        delegator: "attacker-pubkey", // Different delegator
+        delegator: "attackerpubkey", // Different delegator
         signature: originalCertificate.signature // Same signature (stolen)
       };
 
@@ -401,7 +401,7 @@ describe("ActionCodesProtocol", () => {
       const userCode = userResult.actionCode;
 
       // 2. Attacker tries to generate code with same public key but different signature
-      const attackerSignature = "fake-attacker-signature";
+      const attackerSignature = "fakeattackersignature";
       const attackerResult = protocol.generateCode("wallet", canonicalMessage, attackerSignature);
       const attackerCode = attackerResult.actionCode;
 

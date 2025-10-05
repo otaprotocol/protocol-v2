@@ -7,6 +7,7 @@ import { sha256, hmacSha256, truncateBits, digestToDigits } from "../utils/crypt
 import { CODE_MAX_LENGTH, CODE_MIN_LENGTH } from "../constants";
 import { serializeCanonical } from "../utils/canonical";
 import { ProtocolError } from "../errors";
+import bs58 from "bs58";
 
 export class WalletStrategy {
   constructor(private config: CodeGenerationConfig) {}
@@ -30,7 +31,8 @@ export class WalletStrategy {
     let digest: Uint8Array;
     if (signature) {
       // Use signature as the primary entropy source
-      const signatureBytes = new TextEncoder().encode(signature);
+      // Decode Base58 signature to bytes
+      const signatureBytes = bs58.decode(signature);
       digest = hmacSha256(signatureBytes, canonical);
     } else if (secret) {
       // Use secret for HMAC
@@ -77,7 +79,8 @@ export class WalletStrategy {
     let digest: Uint8Array;
     if (actionCode.signature) {
       // Use signature as the primary entropy source
-      const signatureBytes = new TextEncoder().encode(actionCode.signature);
+      // Decode Base58 signature to bytes
+      const signatureBytes = bs58.decode(actionCode.signature);
       digest = hmacSha256(signatureBytes, canonical);
     } else if (actionCode.secret) {
       // Use secret for HMAC

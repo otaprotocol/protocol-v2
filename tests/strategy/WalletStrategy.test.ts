@@ -24,9 +24,9 @@ describe("WalletStrategy", () => {
 
   describe("generateCode", () => {
     test("generates valid action code with correct structure", async () => {
-      const pubkey = "test-pubkey-123";
+      const pubkey = "testpubkey123";
       const canonicalMessage = createCanonicalMessage(pubkey);
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result.actionCode).toMatchObject({
         code: expect.any(String),
@@ -43,8 +43,8 @@ describe("WalletStrategy", () => {
       const pubkey = "test-pubkey-456";
       const canonicalMessage = createCanonicalMessage(pubkey);
 
-      const result1 = strategy.generateCode(canonicalMessage, "test-signature");
-      const result2 = strategy.generateCode(canonicalMessage, "test-signature");
+      const result1 = strategy.generateCode(canonicalMessage, "testsignature");
+      const result2 = strategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
       expect(result1.actionCode.pubkey).toBe(result2.actionCode.pubkey);
@@ -55,8 +55,8 @@ describe("WalletStrategy", () => {
     test("generates different codes for different pubkeys", async () => {
       const canonicalMessage1 = createCanonicalMessage("pubkey1");
       const canonicalMessage2 = createCanonicalMessage("pubkey2");
-      const result1 = strategy.generateCode(canonicalMessage1, "test-signature");
-      const result2 = strategy.generateCode(canonicalMessage2, "test-signature");
+      const result1 = strategy.generateCode(canonicalMessage1, "testsignature");
+      const result2 = strategy.generateCode(canonicalMessage2, "testsignature");
 
       expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
       expect(result1.actionCode.pubkey).toBe("pubkey1");
@@ -71,14 +71,14 @@ describe("WalletStrategy", () => {
       const shortStrategy = new WalletStrategy(config);
 
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = shortStrategy.generateCode(canonicalMessage, "test-signature");
+      const result = shortStrategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result.actionCode.code.length).toBe(6);
     });
 
     test("generates codes with correct TTL", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       const now = Date.now();
       expect(result.actionCode.timestamp).toBeLessThanOrEqual(now);
@@ -89,12 +89,12 @@ describe("WalletStrategy", () => {
 
     test("generates same codes within the same time window", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result1 = strategy.generateCode(canonicalMessage, "test-signature");
+      const result1 = strategy.generateCode(canonicalMessage, "testsignature");
 
       // Wait a short time but within the same window
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const result2 = strategy.generateCode(canonicalMessage, "test-signature");
+      const result2 = strategy.generateCode(canonicalMessage, "testsignature");
 
       // Codes should be the same within the same time window (deterministic)
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
@@ -104,14 +104,14 @@ describe("WalletStrategy", () => {
     test("generates codes with secret when provided", async () => {
       const secret = "test-secret";
       const canonicalMessage = createCanonicalMessage("test-pubkey", secret);
-      const result = strategy.generateCode(canonicalMessage, "test-signature", secret);
+      const result = strategy.generateCode(canonicalMessage, "testsignature", secret);
 
       expect(result.actionCode.secret).toBe(secret);
     });
 
     test("generates codes without secret when not provided", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result.actionCode.secret).toBeUndefined();
     });
@@ -119,8 +119,8 @@ describe("WalletStrategy", () => {
     test("generates different codes with different secrets", async () => {
       const canonicalMessage1 = createCanonicalMessage("test-pubkey", "secret1");
       const canonicalMessage2 = createCanonicalMessage("test-pubkey", "secret2");
-      const result1 = strategy.generateCode(canonicalMessage1, "test-signature", "secret1");
-      const result2 = strategy.generateCode(canonicalMessage2, "test-signature", "secret2");
+      const result1 = strategy.generateCode(canonicalMessage1, "testsignature", "secret1");
+      const result2 = strategy.generateCode(canonicalMessage2, "testsignature", "secret2");
 
       expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
     });
@@ -128,8 +128,8 @@ describe("WalletStrategy", () => {
     test("generates same code with same secret", async () => {
       const secret = "same-secret";
       const canonicalMessage = createCanonicalMessage("test-pubkey", secret);
-      const result1 = strategy.generateCode(canonicalMessage, "test-signature", secret);
-      const result2 = strategy.generateCode(canonicalMessage, "test-signature", secret);
+      const result1 = strategy.generateCode(canonicalMessage, "testsignature", secret);
+      const result2 = strategy.generateCode(canonicalMessage, "testsignature", secret);
 
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
     });
@@ -138,7 +138,7 @@ describe("WalletStrategy", () => {
   describe("validateCode", () => {
     test("validates correct action code", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       expect(() => {
         strategy.validateCode(result.actionCode);
@@ -148,7 +148,7 @@ describe("WalletStrategy", () => {
     test("validates action code with secret", async () => {
       const secret = "test-secret";
       const canonicalMessage = createCanonicalMessage("test-pubkey", secret);
-      const result = strategy.generateCode(canonicalMessage, "test-signature", secret);
+      const result = strategy.generateCode(canonicalMessage, "testsignature", secret);
 
       expect(() => {
         strategy.validateCode(result.actionCode);
@@ -157,7 +157,7 @@ describe("WalletStrategy", () => {
 
     test("throws error for expired code", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       // Manually set expiration to past
       const expiredActionCode: ActionCode = {
@@ -178,7 +178,7 @@ describe("WalletStrategy", () => {
       };
       const skewStrategy = new WalletStrategy(config);
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = skewStrategy.generateCode(canonicalMessage, "test-signature");
+      const result = skewStrategy.generateCode(canonicalMessage, "testsignature");
 
       // Manually set expiration to just past current time but within skew
       const actionCode: ActionCode = {
@@ -193,7 +193,7 @@ describe("WalletStrategy", () => {
 
     test("throws error for invalid code format", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       const actionCode: ActionCode = {
         ...result.actionCode,
@@ -208,7 +208,7 @@ describe("WalletStrategy", () => {
     test("validates code with correct secret", async () => {
       const secret = "correct-secret";
       const canonicalMessage = createCanonicalMessage("test-pubkey", secret);
-      const result = strategy.generateCode(canonicalMessage, "test-signature", secret);
+      const result = strategy.generateCode(canonicalMessage, "testsignature", secret);
 
       expect(() => {
         strategy.validateCode(result.actionCode);
@@ -217,7 +217,7 @@ describe("WalletStrategy", () => {
 
     test("throws error for code with wrong secret", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature", "original-secret");
+      const result = strategy.generateCode(canonicalMessage, "testsignature", "original-secret");
 
       const actionCode: ActionCode = {
         ...result.actionCode,
@@ -231,7 +231,7 @@ describe("WalletStrategy", () => {
 
     test("validates code without secret when generated without secret", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       const actionCode: ActionCode = {
         ...result.actionCode,
@@ -245,7 +245,7 @@ describe("WalletStrategy", () => {
 
     test("throws error for code with secret when generated without secret", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       const actionCode: ActionCode = {
         ...result.actionCode,
@@ -267,7 +267,7 @@ describe("WalletStrategy", () => {
       const shortStrategy = new WalletStrategy(config);
 
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = shortStrategy.generateCode(canonicalMessage, "test-signature");
+      const result = shortStrategy.generateCode(canonicalMessage, "testsignature");
 
       // Should enforce minimum code length of 6 for security
       expect(result.actionCode.code.length).toBe(6);
@@ -284,7 +284,7 @@ describe("WalletStrategy", () => {
       const longStrategy = new WalletStrategy(config);
 
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = longStrategy.generateCode(canonicalMessage, "test-signature");
+      const result = longStrategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result.actionCode.code.length).toBe(20);
       expect(() => {
@@ -306,8 +306,8 @@ describe("WalletStrategy", () => {
       const longStrategy = new WalletStrategy(longConfig);
 
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const shortResult = shortStrategy.generateCode(canonicalMessage, "test-signature");
-      const longResult = longStrategy.generateCode(canonicalMessage, "test-signature");
+      const shortResult = shortStrategy.generateCode(canonicalMessage, "testsignature");
+      const longResult = longStrategy.generateCode(canonicalMessage, "testsignature");
 
       expect(shortResult.actionCode.code.length).toBe(CODE_MIN_LENGTH);
       expect(longResult.actionCode.code.length).toBe(CODE_MAX_LENGTH);
@@ -316,7 +316,7 @@ describe("WalletStrategy", () => {
     test("handles special characters in pubkey", async () => {
       const specialPubkey = "test-pubkey-with-special-chars!@#$%^&*()";
       const canonicalMessage = createCanonicalMessage(specialPubkey);
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result.actionCode.pubkey).toBe(specialPubkey);
       expect(() => {
@@ -327,7 +327,7 @@ describe("WalletStrategy", () => {
     test("handles very long pubkey", async () => {
       const longPubkey = "a".repeat(1000);
       const canonicalMessage = createCanonicalMessage(longPubkey);
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       expect(result.actionCode.pubkey).toBe(longPubkey);
       expect(() => {
@@ -340,7 +340,7 @@ describe("WalletStrategy", () => {
     test("generates codes quickly", async () => {
       const start = Date.now();
       const results = Array.from({ length: 100 }, () =>
-        strategy.generateCode(createCanonicalMessage("test-pubkey"), "test-signature")
+        strategy.generateCode(createCanonicalMessage("test-pubkey"), "testsignature")
       );
       const end = Date.now();
 
@@ -350,7 +350,7 @@ describe("WalletStrategy", () => {
 
     test("validates codes quickly", async () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
-      const result = strategy.generateCode(canonicalMessage, "test-signature");
+      const result = strategy.generateCode(canonicalMessage, "testsignature");
 
       const start = Date.now();
       for (let i = 0; i < 100; i++) {
@@ -365,7 +365,7 @@ describe("WalletStrategy", () => {
   describe("cryptographic properties", () => {
     test("generates codes with good entropy", async () => {
       const codes = Array.from({ length: 1000 }, () =>
-        strategy.generateCode(createCanonicalMessage("test-pubkey"), "test-signature")
+        strategy.generateCode(createCanonicalMessage("test-pubkey"), "testsignature")
       );
 
       // All codes should be the same within the same time window (deterministic)
@@ -381,7 +381,7 @@ describe("WalletStrategy", () => {
     test("generates different codes for different pubkeys with same secret", async () => {
       const secret = "same-secret";
       const codes = Array.from({ length: 100 }, (_, i) =>
-        strategy.generateCode(createCanonicalMessage(`pubkey-${i}`), "test-signature", secret)
+        strategy.generateCode(createCanonicalMessage(`pubkey-${i}`), "testsignature", secret)
       );
 
       const uniqueCodes = new Set(codes.map((r) => r.actionCode.code));
@@ -393,7 +393,7 @@ describe("WalletStrategy", () => {
       const pubkey = "same-pubkey";
 
       const codes = Array.from({ length: 10 }, () =>
-        strategy.generateCode(createCanonicalMessage(pubkey), "test-signature", secret)
+        strategy.generateCode(createCanonicalMessage(pubkey), "testsignature", secret)
       );
 
       const firstCode = codes[0]!.actionCode.code;

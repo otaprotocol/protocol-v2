@@ -215,7 +215,7 @@ describe("Cross-Chain Compatibility", () => {
         pubkey: "test-pubkey",
         timestamp: Date.now() - 200000,
         expiresAt: Date.now() - 100000,
-        signature: "test-signature",
+        signature: "testsignature",
       };
 
       // Both adapters should reject expired codes
@@ -240,7 +240,7 @@ describe("Cross-Chain Compatibility", () => {
         pubkey: "test-pubkey",
         timestamp: Date.now(),
         expiresAt: Date.now() + 120000,
-        signature: "test-signature",
+        signature: "testsignature",
       };
 
       const wrongCodeHash = "wrong-hash-value";
@@ -391,7 +391,7 @@ describe("Cross-Chain Compatibility", () => {
         pubkey: "crosschain-pubkey",
         timestamp: Date.now(),
         expiresAt: Date.now() + 120000,
-        signature: "test-signature",
+        signature: "testsignature",
       };
 
       const codeHashValue = codeHash(actionCode.code);
@@ -426,7 +426,7 @@ describe("Cross-Chain Compatibility", () => {
         pubkey: "test-pubkey",
         timestamp: Date.now(),
         expiresAt: Date.now() + 120000,
-        signature: "test-signature",
+        signature: "testsignature",
       };
 
       const codeHashValue = codeHash(actionCode.code);
