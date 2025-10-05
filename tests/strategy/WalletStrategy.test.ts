@@ -202,7 +202,7 @@ describe("WalletStrategy", () => {
 
       expect(() => {
         strategy.validateCode(actionCode);
-      }).toThrow(InvalidCodeFormatError);
+      }).toThrow("Invalid code:");
     });
 
     test("validates code with correct secret", async () => {
@@ -226,7 +226,7 @@ describe("WalletStrategy", () => {
 
       expect(() => {
         strategy.validateCode(actionCode);
-      }).toThrow(InvalidCodeFormatError);
+      }).toThrow("Invalid code:");
     });
 
     test("validates code without secret when generated without secret", async () => {
@@ -254,7 +254,7 @@ describe("WalletStrategy", () => {
 
       expect(() => {
         strategy.validateCode(actionCode);
-      }).toThrow(InvalidCodeFormatError);
+      }).toThrow("Invalid code:");
     });
   });
 

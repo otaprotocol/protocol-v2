@@ -1,6 +1,7 @@
 export enum ProtocolErrorCode {
   // Code validation errors
   EXPIRED_CODE = "EXPIRED_CODE",
+  INVALID_CODE = "INVALID_CODE",
   INVALID_CODE_FORMAT = "INVALID_CODE_FORMAT",
   INVALID_SIGNATURE = "INVALID_SIGNATURE",
 
@@ -40,6 +41,14 @@ export class ProtocolError extends Error {
   // Code validation errors
   static expiredCode(code: string, expiresAt: number, currentTime: number): ExpiredCodeError {
     return new ExpiredCodeError(code, expiresAt, currentTime);
+  }
+
+  static invalidCode(expected: string, actual: string): ProtocolError {
+    return new ProtocolError(
+      ProtocolErrorCode.INVALID_CODE,
+      `Invalid code: expected '${expected}', got '${actual}'`,
+      { expected, actual }
+    );
   }
 
   static invalidCodeFormat(code: string, reason: string): InvalidCodeFormatError {

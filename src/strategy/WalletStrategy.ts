@@ -95,7 +95,7 @@ export class WalletStrategy {
     const expected = digestToDigits(truncated, clamped);
     
     if (expected !== actionCode.code) {
-      throw ProtocolError.invalidCodeFormat(actionCode.code, "Code does not match expected value");
+      throw ProtocolError.invalidCode(expected, actionCode.code);
     }
   }
 }

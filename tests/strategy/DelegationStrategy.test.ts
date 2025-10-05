@@ -349,7 +349,7 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(tamperedActionCode, certificate);
-      }).toThrow("Code does not match expected value");
+      }).toThrow("Invalid code:");
     });
   });
 
@@ -643,7 +643,7 @@ describe("DelegationStrategy", () => {
       // 4. Try to validate fake code with original certificate (should fail)
       expect(() => {
         strategy.validateDelegatedCode(fakeActionCode, certificate);
-      }).toThrow("Code does not match expected value");
+      }).toThrow("Invalid code:");
     });
 
     it("should reject action code with stolen delegation ID and different certificate", async () => {
@@ -681,7 +681,7 @@ describe("DelegationStrategy", () => {
       // 5. Try to validate fake code with Certificate B (should fail)
       expect(() => {
         strategy.validateDelegatedCode(fakeActionCode, certificateB);
-      }).toThrow("Code does not match expected value");
+      }).toThrow("Invalid code:");
     });
 
     it("should allow code generation with stolen signature but different certificate data (signature verification happens in protocol layer)", async () => {

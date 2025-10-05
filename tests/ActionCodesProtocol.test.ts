@@ -193,7 +193,7 @@ describe("ActionCodesProtocol", () => {
 
       // Generate delegated code
       const result = protocol.generateCode("delegation", certificate);
-      
+  
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
       expect(result.actionCode.pubkey).toBe(testKeypair.publicKey.toString());
