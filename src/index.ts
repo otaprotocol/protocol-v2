@@ -8,3 +8,4 @@ export * from "./strategy/DelegationStrategy";
 export * from "./adapters/SolanaAdapter";
 export * from "./ActionCodesProtocol";
 export * from "./constants";
+export * from "./errors";
