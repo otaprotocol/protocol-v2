@@ -428,4 +428,124 @@ describe("ActionCodesProtocol", () => {
       }).toThrow("Signature verification failed");
     });
   });
+
+  describe("expiration handling", () => {
+    test("generates codes with correct TTL", async () => {
+      const canonicalMessage = new TextEncoder().encode(JSON.stringify({
+        pubkey: testKeypair.publicKey.toString(),
+        windowStart: Date.now(),
+      }));
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+
+      const result = protocol.generateCode("wallet", canonicalMessage, signature);
+      const actionCode = result.actionCode;
+
+      // Verify TTL is exactly 2 minutes (120000ms)
+      const actualTtl = actionCode.expiresAt - actionCode.timestamp;
+      expect(actualTtl).toBe(120000);
+    });
+
+    test("handles different TTL configurations", async () => {
+      const ttlConfigs = [
+        { ttlMs: 60000, description: "1 minute" },
+        { ttlMs: 120000, description: "2 minutes" },
+        { ttlMs: 300000, description: "5 minutes" },
+      ];
+
+      for (const config of ttlConfigs) {
+        const protocolWithTtl = new ActionCodesProtocol({
+          codeLength: 8,
+          ttlMs: config.ttlMs,
+        });
+
+        const canonicalMessage = new TextEncoder().encode(JSON.stringify({
+          pubkey: testKeypair.publicKey.toString(),
+          windowStart: Date.now(),
+        }));
+        const signature = createRealSignature(canonicalMessage, testKeypair);
+
+        const result = protocolWithTtl.generateCode("wallet", canonicalMessage, signature);
+        const actualTtl = result.actionCode.expiresAt - result.actionCode.timestamp;
+        
+        expect(actualTtl).toBe(config.ttlMs);
+      }
+    });
+
+    test("validates timestamp consistency across protocol", async () => {
+      const canonicalMessage = new TextEncoder().encode(JSON.stringify({
+        pubkey: testKeypair.publicKey.toString(),
+        windowStart: Date.now(),
+      }));
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+
+      const result = protocol.generateCode("wallet", canonicalMessage, signature);
+      const actionCode = result.actionCode;
+
+      const now = Date.now();
+      
+      // Timestamp should be reasonable
+      expect(actionCode.timestamp).toBeLessThanOrEqual(now);
+      expect(actionCode.timestamp).toBeGreaterThan(now - 10000); // More lenient
+      
+      // Expiration should be exactly TTL after timestamp
+      expect(actionCode.expiresAt).toBe(actionCode.timestamp + 120000);
+      
+      // Both should be valid timestamps
+      expect(actionCode.timestamp).toBeGreaterThan(0);
+      expect(actionCode.expiresAt).toBeGreaterThan(actionCode.timestamp);
+    });
+
+    test("handles rapid code generation with consistent expiration", async () => {
+      const results = [];
+      const startTime = Date.now();
+
+      // Generate multiple codes rapidly
+      for (let i = 0; i < 5; i++) {
+        const canonicalMessage = new TextEncoder().encode(JSON.stringify({
+          pubkey: testKeypair.publicKey.toString(),
+          windowStart: Date.now(),
+        }));
+        const signature = createRealSignature(canonicalMessage, testKeypair);
+        
+        const result = protocol.generateCode("wallet", canonicalMessage, signature);
+        results.push(result);
+      }
+
+      const endTime = Date.now();
+      const generationTime = endTime - startTime;
+
+      // All codes should have the same TTL
+      const expectedTtl = 120000;
+      results.forEach((result) => {
+        const actualTtl = result.actionCode.expiresAt - result.actionCode.timestamp;
+        expect(actualTtl).toBe(expectedTtl);
+      });
+
+      // Generation should be fast
+      expect(generationTime).toBeLessThan(1000);
+    });
+
+    test("verifies expiration with different time windows", async () => {
+      const baseTime = Date.now();
+      const windowSizes = [60000, 120000, 300000]; // 1, 2, 5 minutes
+
+      for (const windowSize of windowSizes) {
+        // Use current time to avoid past timestamps
+        const windowStart = Math.floor(baseTime / windowSize) * windowSize;
+        const actualWindowStart = Math.max(windowStart, baseTime - 60000); // At most 1 minute ago
+        
+        const canonicalMessage = new TextEncoder().encode(JSON.stringify({
+          pubkey: testKeypair.publicKey.toString(),
+          windowStart: actualWindowStart,
+        }));
+        const signature = createRealSignature(canonicalMessage, testKeypair);
+
+        const result = protocol.generateCode("wallet", canonicalMessage, signature);
+
+        // Verify the timestamp matches the window start
+        expect(result.actionCode.timestamp).toBe(actualWindowStart);
+        expect(result.actionCode.expiresAt).toBe(actualWindowStart + 120000);
+      }
+    });
+  });
 });

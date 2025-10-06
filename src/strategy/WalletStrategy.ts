@@ -46,7 +46,8 @@ export class WalletStrategy {
       CODE_MIN_LENGTH,
       Math.min(CODE_MAX_LENGTH, this.config.codeLength)
     );
-    const truncated = truncateBits(digest, 8 * Math.ceil(clamped / 2));
+    const bitsNeeded = 8 * Math.ceil(clamped / 2);
+    const truncated = truncateBits(digest, bitsNeeded);
     const code = digestToDigits(truncated, clamped);
 
     const actionCode: ActionCode = {
