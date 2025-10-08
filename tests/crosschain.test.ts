@@ -16,6 +16,7 @@ describe("Cross-Chain Compatibility", () => {
   let protocol: ActionCodesProtocol;
   let solanaAdapter: SolanaAdapter;
   let nodeCryptoAdapter: NodeCryptoAdapter;
+  let testKeypair: Keypair;
 
   beforeEach(() => {
     protocol = new ActionCodesProtocol({
@@ -25,6 +26,7 @@ describe("Cross-Chain Compatibility", () => {
 
     solanaAdapter = new SolanaAdapter();
     nodeCryptoAdapter = new NodeCryptoAdapter();
+    testKeypair = Keypair.generate();
 
     // Register both adapters
     protocol.registerAdapter("solana", solanaAdapter);
@@ -109,16 +111,19 @@ describe("Cross-Chain Compatibility", () => {
 
       const tx = new Transaction().add(instruction);
       tx.recentBlockhash = "11111111111111111111111111111111";
+      tx.feePayer = keypair.publicKey;
       tx.sign(keypair);
+
+      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
 
       // Verify transaction matches code
       expect(() => {
-        solanaAdapter.verifyTransactionMatchesCode(actionCode, tx);
+        solanaAdapter.verifyTransactionMatchesCode(actionCode, base64String);
       }).not.toThrow();
 
       // Verify transaction is signed by intended owner
       expect(() => {
-        solanaAdapter.verifyTransactionSignedByIntentOwner(tx);
+        solanaAdapter.verifyTransactionSignedByIntentOwner(base64String);
       }).not.toThrow();
     });
   });
@@ -406,6 +411,9 @@ describe("Cross-Chain Compatibility", () => {
       const solanaTx = new Transaction().add(
         SolanaAdapter.createProtocolMetaIx(meta as ProtocolMetaFields)
       );
+      solanaTx.recentBlockhash = "11111111111111111111111111111111";
+      solanaTx.feePayer = testKeypair.publicKey;
+      const solanaBase64 = Buffer.from(solanaTx.serialize({requireAllSignatures: false})).toString('base64');
 
       const nodeCryptoTx = NodeCryptoAdapter.attachProtocolMeta(
         { instructions: [] },
@@ -413,7 +421,7 @@ describe("Cross-Chain Compatibility", () => {
       );
 
       // Both should parse the same meta correctly
-      const solanaMeta = solanaAdapter.parseMeta(solanaTx);
+      const solanaMeta = solanaAdapter.parseMeta(solanaBase64);
       const nodeCryptoMeta = nodeCryptoAdapter.parseMeta(nodeCryptoTx);
 
       expect(solanaMeta).toEqual(meta);
@@ -446,9 +454,16 @@ describe("Cross-Chain Compatibility", () => {
       const validSolanaTx = new Transaction().add(
         SolanaAdapter.createProtocolMetaIx(validMeta as ProtocolMetaFields)
       );
+      validSolanaTx.recentBlockhash = "11111111111111111111111111111111";
+      validSolanaTx.feePayer = testKeypair.publicKey;
+      const validSolanaBase64 = Buffer.from(validSolanaTx.serialize({requireAllSignatures: false})).toString('base64');
+
       const invalidSolanaTx = new Transaction().add(
         SolanaAdapter.createProtocolMetaIx(invalidMeta as ProtocolMetaFields)
       );
+      invalidSolanaTx.recentBlockhash = "11111111111111111111111111111111";
+      invalidSolanaTx.feePayer = testKeypair.publicKey;
+      const invalidSolanaBase64 = Buffer.from(invalidSolanaTx.serialize({requireAllSignatures: false})).toString('base64');
 
       const validNodeCryptoTx = NodeCryptoAdapter.attachProtocolMeta(
         { instructions: [] },
@@ -461,11 +476,11 @@ describe("Cross-Chain Compatibility", () => {
 
       // Both chains should accept valid meta and reject invalid meta
       expect(() => {
-        solanaAdapter.verifyTransactionMatchesCode(actionCode, validSolanaTx);
+        solanaAdapter.verifyTransactionMatchesCode(actionCode, validSolanaBase64);
       }).not.toThrow();
 
       expect(() => {
-        solanaAdapter.verifyTransactionMatchesCode(actionCode, invalidSolanaTx);
+        solanaAdapter.verifyTransactionMatchesCode(actionCode, invalidSolanaBase64);
       }).toThrow();
 
       expect(() => {

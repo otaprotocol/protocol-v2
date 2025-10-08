@@ -3,6 +3,7 @@ export { BaseChainAdapter } from "./adapters/BaseChainAdapter";
 export type { ChainWalletStrategyContext, ChainDelegationStrategyContext } from "./adapters/BaseChainAdapter";
 export * from "./utils/crypto";
 export * from "./utils/canonical";
+export * from "./utils/protocolMeta";
 export * from "./strategy/WalletStrategy";
 export * from "./strategy/DelegationStrategy";
 export * from "./adapters/SolanaAdapter";

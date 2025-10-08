@@ -122,25 +122,54 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
     return createMemoInstruction(metaString);
   }
 
-  /** Extract protocol metadata string (memo) from a transaction, or null */
-  getProtocolMeta(tx: SolanaTransaction): string | null {
-    for (const ix of this.getMemoInstructions(tx)) {
-      const data = ix.data;
-      try {
-        const s = new TextDecoder().decode(data);
-        // Optionally: test parse
-        const parsed = parseProtocolMeta(s);
-        if (parsed) return s;
-      } catch {
-        // ignore
+  /** Extract protocol metadata string (memo) from a base64-encoded transaction, or null */
+  getProtocolMeta(txString: string): string | null {
+    try {
+      const tx = this.deserializeTransaction(txString);
+      for (const ix of this.getMemoInstructions(tx)) {
+        const data = ix.data;
+        try {
+          const s = new TextDecoder().decode(data);
+          // Optionally: test parse
+          const parsed = parseProtocolMeta(s);
+          if (parsed) return s;
+        } catch {
+          // ignore
+        }
       }
+      return null;
+    } catch {
+      return null;
     }
-    return null;
   }
 
-  /** Get parsed ProtocolMeta object, or null if none or invalid */
-  parseMeta(tx: SolanaTransaction): ProtocolMetaFields | null {
-    const s = this.getProtocolMeta(tx);
+  /** Deserialize a base64-encoded transaction string to SolanaTransaction */
+  private deserializeTransaction(txString: string): SolanaTransaction {
+    try {
+      // Try versioned first (most common now)
+      const versionedTx = VersionedTransaction.deserialize(Buffer.from(txString, 'base64'));
+      
+      // Check if this is actually a versioned transaction by checking if it has a MessageV0
+      if (versionedTx.message instanceof MessageV0) {
+        return versionedTx;
+      } else {
+        // This is likely a legacy transaction that was incorrectly deserialized as versioned
+        // Fall back to legacy deserialization
+        return Transaction.from(Buffer.from(txString, 'base64'));
+      }
+    } catch {
+      try {
+        // Fallback to legacy
+        return Transaction.from(Buffer.from(txString, 'base64'));
+      } catch {
+        throw ProtocolError.invalidTransactionFormat('Invalid base64 transaction format');
+      }
+    }
+  }
+
+  /** Get parsed ProtocolMeta object from base64-encoded transaction, or null if none or invalid */
+  parseMeta(txString: string): ProtocolMetaFields | null {
+    const s = this.getProtocolMeta(txString);
     if (!s) return null;
     return parseProtocolMeta(s);
   }
@@ -182,12 +211,12 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
   }
 
   /**
-   * Validate that a transaction's memo meta aligns with the bound `actionCode`.
+   * Validate that a base64-encoded transaction's memo meta aligns with the bound `actionCode`.
    * Throws ProtocolError if validation fails.
    */
   verifyTransactionMatchesCode(
     actionCode: ActionCode,
-    tx: SolanaTransaction
+    txString: string
   ): void {
     // Check expiration first
     const currentTime = Date.now();
@@ -199,7 +228,7 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
       );
     }
 
-    const meta = this.parseMeta(tx);
+    const meta = this.parseMeta(txString);
     if (!meta) {
       throw ProtocolError.missingMeta();
     }
@@ -222,12 +251,12 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
   }
 
   /**
-   * Verify that the transaction is signed by the "intendedFor" pubkey
+   * Verify that the base64-encoded transaction is signed by the "intendedFor" pubkey
    * as declared in the protocol meta of the transaction.
    * Throws ProtocolError if validation fails.
    */
-  verifyTransactionSignedByIntentOwner(tx: SolanaTransaction): void {
-    const meta = this.parseMeta(tx);
+  verifyTransactionSignedByIntentOwner(txString: string): void {
+    const meta = this.parseMeta(txString);
     if (!meta) {
       throw ProtocolError.missingMeta();
     }
@@ -249,6 +278,7 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
       );
     }
 
+    const tx = this.deserializeTransaction(txString);
     const actualSigners: string[] = [];
 
     // For legacy Transaction
@@ -295,24 +325,31 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
   }
 
   /**
-   * Attach protocol meta into a legacy or versioned transaction.
-   *
-   * ⚠️ Note: this mutates the given transaction.
+   * Attach protocol meta into a base64-encoded transaction and return the modified transaction as base64.
+   * Throws ProtocolError if the transaction already contains protocol meta.
    */
-  static attachProtocolMeta<T extends SolanaTransaction>(
-    tx: T,
+  static attachProtocolMeta(
+    txString: string,
     meta: ProtocolMetaFields
-  ): T {
-    const metaIx = SolanaAdapter.createProtocolMetaIx(meta);
-
-    if (tx instanceof Transaction) {
-      // Legacy tx: just push memo instruction
-      tx.add(metaIx);
-      return tx as T;
+  ): string {
+    // Check if transaction already has protocol meta
+    const adapter = new SolanaAdapter();
+    const existingMeta = adapter.getProtocolMeta(txString);
+    if (existingMeta) {
+      throw ProtocolError.invalidTransactionFormat(
+        'Transaction already contains protocol meta. Cannot attach additional protocol meta.'
+      );
     }
 
-    if (tx instanceof VersionedTransaction) {
-      const msg = tx.message as MessageV0;
+    const metaIx = SolanaAdapter.createProtocolMetaIx(meta);
+    
+    try {
+      // Try to deserialize as versioned first
+      const versionedTx = VersionedTransaction.deserialize(Buffer.from(txString, 'base64'));
+      
+      // Check if this is actually a versioned transaction by checking if it has a MessageV0
+      if (versionedTx.message instanceof MessageV0) {
+        const msg = versionedTx.message;
 
       // Extend static account keys with programId if missing
       const newStaticKeys = [...msg.staticAccountKeys];
@@ -343,10 +380,31 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
       // Re-wrap in VersionedTransaction
       const newTx = new VersionedTransaction(newMsg);
       // Preserve existing signatures if any
-      newTx.signatures = tx.signatures;
-      return newTx as T;
+      newTx.signatures = versionedTx.signatures;
+      
+        return Buffer.from(newTx.serialize()).toString('base64');
+      } else {
+        // This is likely a legacy transaction that was incorrectly deserialized as versioned
+        // Fall back to legacy deserialization
+        const legacyTx = Transaction.from(Buffer.from(txString, 'base64'));
+        
+        // Legacy tx: just push memo instruction
+        legacyTx.add(metaIx);
+        
+        return Buffer.from(legacyTx.serialize({requireAllSignatures: false})).toString('base64');
+      }
+    } catch {
+      try {
+        // Fallback to legacy transaction
+        const legacyTx = Transaction.from(Buffer.from(txString, 'base64'));
+        
+        // Legacy tx: just push memo instruction
+        legacyTx.add(metaIx);
+        
+        return Buffer.from(legacyTx.serialize({requireAllSignatures: false})).toString('base64');
+      } catch {
+        throw ProtocolError.invalidTransactionFormat('Invalid base64 transaction format');
+      }
     }
-
-    throw new Error("Unsupported transaction type");
   }
 }

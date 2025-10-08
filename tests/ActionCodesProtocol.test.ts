@@ -92,10 +92,14 @@ describe("ActionCodesProtocol", () => {
         int: "user@example.com",
       });
       const tx = new Transaction().add(instruction);
+      tx.recentBlockhash = "11111111111111111111111111111111";
+      tx.feePayer = testKeypair.publicKey;
+
+      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
 
       // Should not throw for valid transaction
       expect(() => {
-        protocol.adapter.solana.verifyTransactionMatchesCode(actionCode, tx);
+        protocol.adapter.solana.verifyTransactionMatchesCode(actionCode, base64String);
       }).not.toThrow();
     });
 
@@ -111,16 +115,22 @@ describe("ActionCodesProtocol", () => {
       
       const tx = new Transaction().add(instruction);
       tx.recentBlockhash = "11111111111111111111111111111111";
+      tx.feePayer = keypair.publicKey;
       tx.sign(keypair);
+
+      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
 
       // Should not throw for valid transaction
       expect(() => {
-        protocol.adapter.solana.verifyTransactionSignedByIntentOwner(tx);
+        protocol.adapter.solana.verifyTransactionSignedByIntentOwner(base64String);
       }).not.toThrow();
     });
 
     test("can attach protocol meta to transaction via typed access", () => {
       const tx = new Transaction();
+      tx.recentBlockhash = "11111111111111111111111111111111";
+      tx.feePayer = testKeypair.publicKey;
+      
       const code = "12345678";
       const codeHashValue = codeHash(code);
       const meta = {
@@ -130,16 +140,19 @@ describe("ActionCodesProtocol", () => {
         p: { amount: 100 }
       };
       
-      const result = SolanaAdapter.attachProtocolMeta(tx, meta as ProtocolMetaFields);
+      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const result = SolanaAdapter.attachProtocolMeta(base64String, meta as ProtocolMetaFields);
       
-      // Should be the same transaction instance (mutated)
-      expect(result).toBe(tx);
+      // Should return a new base64 string (not mutate original)
+      expect(result).not.toBe(base64String);
+      expect(typeof result).toBe('string');
       
-      // Should have the memo instruction
-      expect(tx.instructions).toHaveLength(1);
+      // Should be able to deserialize the result
+      const resultTx = Transaction.from(Buffer.from(result, 'base64'));
+      expect(resultTx.instructions).toHaveLength(1);
       
       // Should be able to extract the meta
-      const extractedMeta = protocol.adapter.solana.getProtocolMeta(tx);
+      const extractedMeta = protocol.adapter.solana.getProtocolMeta(result);
       expect(extractedMeta).toContain("actioncodes:ver=2");
       expect(extractedMeta).toContain(`id=${codeHashValue}`);
     });
