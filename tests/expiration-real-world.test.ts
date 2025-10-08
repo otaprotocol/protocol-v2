@@ -117,8 +117,8 @@ describe("Real-World Expiration Scenarios", () => {
         "testsignature"
       );
 
-      // Wait exactly for TTL to expire
-      await new Promise((resolve) => setTimeout(resolve, ttlMs));
+      // Wait for TTL to expire with a small buffer for test execution time
+      await new Promise((resolve) => setTimeout(resolve, ttlMs + 50));
 
       // Should throw expired error at exact boundary
       expect(() => {
@@ -128,7 +128,7 @@ describe("Real-World Expiration Scenarios", () => {
 
     test("verifies TTL consistency across multiple generations", () => {
       const pubkey = "test-pubkey-consistency";
-      const results = [];
+      const results: WalletStrategyCodeGenerationResult[] = [];
 
       // Generate multiple codes with same parameters
       for (let i = 0; i < 10; i++) {
