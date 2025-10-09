@@ -22,6 +22,29 @@ function createRealSignature(message: Uint8Array, keypair: Keypair): string {
   return bs58.encode(signature);
 }
 
+// Helper function to simulate user creating a revoke signature
+function createUserRevokeSignature(
+  actionCode: ActionCode, 
+  userKeypair: Keypair
+): { signature: string; canonicalRevokeMessageParts: any } {
+  // User creates revoke message with the code hash and timestamp from the action code
+  const realCodeHash = codeHash(actionCode.code);
+  const canonicalRevokeMessageParts = {
+    pubkey: actionCode.pubkey,
+    codeHash: realCodeHash,
+    windowStart: actionCode.timestamp,
+  };
+
+  // User signs the revoke message with their wallet
+  const revokeMessage = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+  const userRevokeSignature = createRealSignature(revokeMessage, userKeypair);
+
+  return {
+    signature: userRevokeSignature,
+    canonicalRevokeMessageParts,
+  };
+}
+
 describe("ActionCodesProtocol", () => {
   let protocol: ActionCodesProtocol;
   let testKeypair: Keypair;
@@ -571,13 +594,14 @@ describe("ActionCodesProtocol", () => {
   });
 
   describe("revoke verification integration", () => {
-    test("verifyRevokeWithWallet works with real action code", async () => {
+    test("verifyRevokeWithWallet works with real action code and user signature", async () => {
       // 1. Generate a real action code using the protocol
       const canonicalMessage = protocol.getCanonicalMessageParts(testKeypair.publicKey.toString());
       const signature = createRealSignature(canonicalMessage, testKeypair);
       const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
 
-      // 2. Get the real code hash and timestamp from the generated action code
+      // 2. User wants to revoke this action code
+      // User creates revoke message with the code hash and timestamp from the action code
       const realCodeHash = codeHash(actionCode.code);
       const canonicalRevokeMessageParts = {
         pubkey: actionCode.pubkey,
@@ -585,19 +609,19 @@ describe("ActionCodesProtocol", () => {
         windowStart: actionCode.timestamp,
       };
 
-      // 3. Create a revoke message and sign it
+      // 3. User signs the revoke message with their wallet (this is what the user provides)
       const revokeMessage = serializeCanonicalRevoke(canonicalRevokeMessageParts);
-      const revokeSignature = createRealSignature(revokeMessage, testKeypair);
+      const userRevokeSignature = createRealSignature(revokeMessage, testKeypair);
 
-      // 4. Create context for revoke verification
+      // 4. User provides the signature for verification (this is the input from user)
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
         pubkey: testKeypair.publicKey,
-        signature: revokeSignature,
+        signature: userRevokeSignature, // This is the signature the user provides
         canonicalRevokeMessageParts,
       };
 
-      // 5. Verify the revoke signature using the Solana adapter
+      // 5. System verifies the user's revoke signature
       const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
       const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
       
@@ -681,6 +705,35 @@ describe("ActionCodesProtocol", () => {
         const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
         expect(verifyResult).toBe(true);
       }
+    });
+
+    test("realistic user workflow: generate code, then revoke it", async () => {
+      // 1. User generates an action code
+      const canonicalMessage = protocol.getCanonicalMessageParts(testKeypair.publicKey.toString());
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+      const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
+
+      // 2. User decides to revoke the action code
+      // User creates a revoke signature using their wallet
+      const { signature: userRevokeSignature, canonicalRevokeMessageParts } = 
+        createUserRevokeSignature(actionCode, testKeypair);
+
+      // 3. User submits the revoke request to the system
+      // System verifies the user's revoke signature
+      const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: testKeypair.publicKey,
+        signature: userRevokeSignature, // User provided this signature
+        canonicalRevokeMessageParts,
+      };
+
+      const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
+      expect(verifyResult).toBe(true);
+
+      // 4. System can now safely revoke the action code
+      // (In a real implementation, this would mark the code as revoked in the database)
+      console.log(`Action code ${actionCode.code} successfully revoked by user ${actionCode.pubkey}`);
     });
   });
 });
