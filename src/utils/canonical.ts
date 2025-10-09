@@ -1,7 +1,11 @@
-import type { CanonicalMessageParts } from "../types";
+import type {
+  CanonicalMessageParts,
+  CanonicalRevokeMessageParts,
+} from "../types";
 
 export const CANONICAL_MESSAGE_VERSION = 1;
 export const CANONICAL_MESSAGE_PREFIX = "actioncodes";
+export const CANONICAL_REVOKE_MESSAGE_PREFIX = "actioncodes-revoke";
 
 export function serializeCanonical(parts: CanonicalMessageParts): Uint8Array {
   const json = JSON.stringify({
@@ -15,4 +19,15 @@ export function serializeCanonical(parts: CanonicalMessageParts): Uint8Array {
   return new TextEncoder().encode(json);
 }
 
-
+export function serializeCanonicalRevoke(
+  parts: CanonicalRevokeMessageParts
+): Uint8Array {
+  const json = JSON.stringify({
+    id: CANONICAL_REVOKE_MESSAGE_PREFIX,
+    ver: CANONICAL_MESSAGE_VERSION,
+    pubkey: parts.pubkey,
+    codeHash: parts.codeHash,
+    windowStart: parts.windowStart,
+  });
+  return new TextEncoder().encode(json);
+}

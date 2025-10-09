@@ -12,8 +12,14 @@ import {
   SolanaAdapter,
   type SolanaContext,
 } from "../../src/adapters/SolanaAdapter";
-import { type ChainWalletStrategyContext } from "../../src/adapters/BaseChainAdapter";
-import { serializeCanonical } from "../../src/utils/canonical";
+import {
+  type ChainWalletStrategyContext,
+  type ChainWalletStrategyRevokeContext,
+} from "../../src/adapters/BaseChainAdapter";
+import {
+  serializeCanonical,
+  serializeCanonicalRevoke,
+} from "../../src/utils/canonical";
 import { codeHash } from "../../src/utils/crypto";
 import type { ActionCode } from "../../src/types";
 import type { ProtocolMetaFields } from "../../src/utils/protocolMeta";
@@ -98,6 +104,185 @@ describe("SolanaAdapter", () => {
     });
   });
 
+  describe("verifyRevokeWithWallet method", () => {
+    test("verifyRevokeWithWallet returns true for valid signature", () => {
+      const canonicalRevokeMessageParts = {
+        pubkey: keypair.publicKey.toString(),
+        codeHash: "test-code-hash-123",
+        windowStart: Date.now(),
+      };
+      const message = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+      const signature = nacl.sign.detached(message, keypair.secretKey);
+      const signatureB58 = bs58.encode(signature);
+
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey,
+        signature: signatureB58,
+        canonicalRevokeMessageParts,
+      };
+
+      const result = adapter.verifyRevokeWithWallet(context);
+      expect(result).toBe(true);
+    });
+
+    test("verifyRevokeWithWallet returns false for invalid signature", () => {
+      const canonicalRevokeMessageParts = {
+        pubkey: keypair.publicKey.toString(),
+        codeHash: "test-code-hash-123",
+        windowStart: Date.now(),
+      };
+      const message = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+      const wrongKeypair = nacl.sign.keyPair();
+      const signature = nacl.sign.detached(message, wrongKeypair.secretKey);
+      const signatureB58 = bs58.encode(signature);
+
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey, // Different pubkey than the one used to sign
+        signature: signatureB58,
+        canonicalRevokeMessageParts,
+      };
+
+      const result = adapter.verifyRevokeWithWallet(context);
+      expect(result).toBe(false);
+    });
+
+    test("verifyRevokeWithWallet works with both string and PublicKey pubkeys", () => {
+      const canonicalRevokeMessageParts = {
+        pubkey: keypair.publicKey.toString(),
+        codeHash: "test-code-hash-456",
+        windowStart: Date.now(),
+      };
+      const message = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+      const signature = nacl.sign.detached(message, keypair.secretKey);
+      const signatureB58 = bs58.encode(signature);
+
+      // Test with PublicKey object
+      const context1: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey, // PublicKey object
+        signature: signatureB58,
+        canonicalRevokeMessageParts,
+      };
+      expect(adapter.verifyRevokeWithWallet(context1)).toBe(true);
+
+      // Test with base58 string
+      const context2: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey.toString(), // base58 string
+        signature: signatureB58,
+        canonicalRevokeMessageParts,
+      };
+      expect(adapter.verifyRevokeWithWallet(context2)).toBe(true);
+    });
+
+    test("verifyRevokeWithWallet returns false for wrong chain", () => {
+      const canonicalRevokeMessageParts = {
+        pubkey: keypair.publicKey.toString(),
+        codeHash: "test-code-hash-789",
+        windowStart: Date.now(),
+      };
+      const message = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+      const signature = nacl.sign.detached(message, keypair.secretKey);
+      const signatureB58 = bs58.encode(signature);
+
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "ethereum", // Wrong chain
+        pubkey: keypair.publicKey,
+        signature: signatureB58,
+        canonicalRevokeMessageParts,
+      };
+
+      const result = adapter.verifyRevokeWithWallet(context);
+      expect(result).toBe(false);
+    });
+
+    test("verifyRevokeWithWallet returns false for missing required fields", () => {
+      const canonicalRevokeMessageParts = {
+        pubkey: keypair.publicKey.toString(),
+        codeHash: "test-code-hash-999",
+        windowStart: Date.now(),
+      };
+
+      // Missing signature
+      const context1: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey,
+        signature: "", // Empty signature
+        canonicalRevokeMessageParts,
+      };
+      expect(adapter.verifyRevokeWithWallet(context1)).toBe(false);
+
+      // Missing pubkey
+      const context2: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: "", // Empty pubkey
+        signature: "some-signature",
+        canonicalRevokeMessageParts,
+      };
+      expect(adapter.verifyRevokeWithWallet(context2)).toBe(false);
+
+      // Missing canonicalRevokeMessageParts
+      const context3: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey,
+        signature: "some-signature",
+        canonicalRevokeMessageParts: null as any, // Missing parts
+      };
+      expect(adapter.verifyRevokeWithWallet(context3)).toBe(false);
+    });
+
+    test("verifyRevokeWithWallet handles malformed signature gracefully", () => {
+      const canonicalRevokeMessageParts = {
+        pubkey: keypair.publicKey.toString(),
+        codeHash: "test-code-hash-malformed",
+        windowStart: Date.now(),
+      };
+
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: keypair.publicKey,
+        signature: "invalid-base58-signature", // Invalid base58
+        canonicalRevokeMessageParts,
+      };
+
+      const result = adapter.verifyRevokeWithWallet(context);
+      expect(result).toBe(false);
+    });
+
+    test("verifyRevokeWithWallet handles different codeHash values", () => {
+      const codeHashes = [
+        "test-code-hash-1",
+        "another-code-hash-2",
+        "yet-another-code-hash-3",
+        "a".repeat(64), // Long hash
+        "short", // Short hash
+      ];
+
+      for (const codeHash of codeHashes) {
+        const canonicalRevokeMessageParts = {
+          pubkey: keypair.publicKey.toString(),
+          codeHash,
+          windowStart: Date.now(),
+        };
+        const message = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+        const signature = nacl.sign.detached(message, keypair.secretKey);
+        const signatureB58 = bs58.encode(signature);
+
+        const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+          chain: "solana",
+          pubkey: keypair.publicKey,
+          signature: signatureB58,
+          canonicalRevokeMessageParts,
+        };
+
+        const result = adapter.verifyRevokeWithWallet(context);
+        expect(result).toBe(true);
+      }
+    });
+  });
+
   describe("transaction meta methods", () => {
     test("createProtocolMetaIx creates valid memo instruction", () => {
       const code = "12345678";
@@ -127,7 +312,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       const result = adapter.getProtocolMeta(base64String);
       expect(result).toContain("actioncodes:ver=2");
       expect(result).toContain(`id=${codeHashValue}`);
@@ -140,7 +327,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       const result = adapter.getProtocolMeta(base64String);
       expect(result).toBe(null);
     });
@@ -158,7 +347,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       const result = adapter.parseMeta(base64String);
       expect(result).toEqual({
         ver: 2,
@@ -173,7 +364,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       const result = adapter.parseMeta(base64String);
       expect(result).toBe(null);
     });
@@ -198,7 +391,9 @@ describe("SolanaAdapter", () => {
       tx.feePayer = keypair.publicKey;
 
       // Should not throw for valid transaction
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionMatchesCode(actionCode, base64String);
       }).not.toThrow();
@@ -222,7 +417,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionMatchesCode(actionCode, base64String);
       }).toThrow();
@@ -241,7 +438,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionMatchesCode(actionCode, base64String);
       }).toThrow();
@@ -264,7 +463,9 @@ describe("SolanaAdapter", () => {
       tx.sign(keypair); // Sign with the intended keypair
 
       // Should not throw for valid transaction
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionSignedByIntentOwner(base64String);
       }).not.toThrow();
@@ -287,7 +488,9 @@ describe("SolanaAdapter", () => {
       tx.feePayer = signingKeypair.publicKey; // Use the signing keypair as fee payer
       tx.sign(signingKeypair); // Sign with different keypair
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionSignedByIntentOwner(base64String);
       }).toThrow();
@@ -300,7 +503,9 @@ describe("SolanaAdapter", () => {
       tx.feePayer = keypair.publicKey;
       tx.sign(keypair);
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionSignedByIntentOwner(base64String);
       }).toThrow();
@@ -319,7 +524,9 @@ describe("SolanaAdapter", () => {
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       expect(() => {
         adapter.verifyTransactionSignedByIntentOwner(base64String);
       }).toThrow();
@@ -329,7 +536,7 @@ describe("SolanaAdapter", () => {
       const tx = new Transaction();
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
-      
+
       const code = "12345678";
       const codeHashValue = codeHash(code);
       const meta = {
@@ -339,7 +546,9 @@ describe("SolanaAdapter", () => {
         p: { amount: 100 },
       };
 
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
       const result = SolanaAdapter.attachProtocolMeta(
         base64String,
         meta as ProtocolMetaFields
@@ -349,7 +558,7 @@ describe("SolanaAdapter", () => {
       expect(result).not.toBe(base64String);
 
       // Should be able to deserialize the result
-      const resultTx = Transaction.from(Buffer.from(result, 'base64'));
+      const resultTx = Transaction.from(Buffer.from(result, "base64"));
       expect(resultTx.instructions).toHaveLength(1);
       expect(resultTx.instructions[0]!.programId.toString()).toBe(
         MEMO_PROGRAM_ID.toString()
@@ -385,7 +594,7 @@ describe("SolanaAdapter", () => {
         int: "user2@example.com",
       };
 
-      const base64String = Buffer.from(tx.serialize()).toString('base64');
+      const base64String = Buffer.from(tx.serialize()).toString("base64");
       const result = SolanaAdapter.attachProtocolMeta(
         base64String,
         meta as ProtocolMetaFields
@@ -427,14 +636,16 @@ describe("SolanaAdapter", () => {
         int: "user3@example.com",
       };
 
-      const base64String = Buffer.from(tx.serialize()).toString('base64');
+      const base64String = Buffer.from(tx.serialize()).toString("base64");
       const result = SolanaAdapter.attachProtocolMeta(
         base64String,
         meta as ProtocolMetaFields
       );
 
       // Should preserve signatures
-      const resultTx = VersionedTransaction.deserialize(Buffer.from(result, 'base64'));
+      const resultTx = VersionedTransaction.deserialize(
+        Buffer.from(result, "base64")
+      );
       expect(resultTx.signatures).toEqual(tx.signatures);
     });
 
@@ -462,14 +673,16 @@ describe("SolanaAdapter", () => {
         int: "user4@example.com",
       };
 
-      const base64String = Buffer.from(tx.serialize()).toString('base64');
+      const base64String = Buffer.from(tx.serialize()).toString("base64");
       const result = SolanaAdapter.attachProtocolMeta(
         base64String,
         meta as ProtocolMetaFields
       );
 
       // Should not duplicate MEMO_PROGRAM_ID
-      const resultTx = VersionedTransaction.deserialize(Buffer.from(result, 'base64'));
+      const resultTx = VersionedTransaction.deserialize(
+        Buffer.from(result, "base64")
+      );
       const msg = resultTx.message as MessageV0;
       const memoProgramCount = msg.staticAccountKeys.filter((k) =>
         k.equals(MEMO_PROGRAM_ID)
@@ -500,23 +713,32 @@ describe("SolanaAdapter", () => {
     test("attachProtocolMeta throws when transaction already has protocol meta", () => {
       const code = "44444444";
       const codeHashValue = codeHash(code);
-      
+
       // Create transaction with existing protocol meta
-      const existingMeta = { ver: 2, id: "existing-hash", int: keypair.publicKey.toString() } as ProtocolMetaFields;
+      const existingMeta = {
+        ver: 2,
+        id: "existing-hash",
+        int: keypair.publicKey.toString(),
+      } as ProtocolMetaFields;
       const existingMetaIx = SolanaAdapter.createProtocolMetaIx(existingMeta);
-      
+
       const tx = new Transaction();
       tx.recentBlockhash = "11111111111111111111111111111111";
       tx.feePayer = keypair.publicKey;
       tx.add(existingMetaIx);
-      
-      const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
-      
+
+      const base64String = Buffer.from(
+        tx.serialize({ requireAllSignatures: false })
+      ).toString("base64");
+
       // Try to attach new protocol meta
       const newMeta = { ver: 2, id: codeHashValue, int: "user" };
-      
+
       expect(() => {
-        SolanaAdapter.attachProtocolMeta(base64String, newMeta as ProtocolMetaFields);
+        SolanaAdapter.attachProtocolMeta(
+          base64String,
+          newMeta as ProtocolMetaFields
+        );
       }).toThrow("Transaction already contains protocol meta");
     });
   });
@@ -620,9 +842,11 @@ describe("SolanaAdapter", () => {
             addressTableLookups: [],
           })
         );
-        
-        const base64String = Buffer.from(versionedTx.serialize()).toString('base64');
-        
+
+        const base64String = Buffer.from(versionedTx.serialize()).toString(
+          "base64"
+        );
+
         // Test that we can deserialize it
         const result = adapter.getProtocolMeta(base64String);
         expect(result).toBeNull(); // No memo instructions, so should be null
@@ -633,9 +857,11 @@ describe("SolanaAdapter", () => {
         const legacyTx = new Transaction();
         legacyTx.recentBlockhash = "11111111111111111111111111111111";
         legacyTx.feePayer = keypair.publicKey;
-        
-        const base64String = Buffer.from(legacyTx.serialize({requireAllSignatures: false})).toString('base64');
-        
+
+        const base64String = Buffer.from(
+          legacyTx.serialize({ requireAllSignatures: false })
+        ).toString("base64");
+
         // Test that we can deserialize it
         const result = adapter.getProtocolMeta(base64String);
         expect(result).toBeNull(); // No memo instructions, so should be null
@@ -660,17 +886,21 @@ describe("SolanaAdapter", () => {
             },
             staticAccountKeys: [keypair.publicKey, MEMO_PROGRAM_ID],
             recentBlockhash: "11111111111111111111111111111111",
-            compiledInstructions: [{
-              programIdIndex: 1,
-              accountKeyIndexes: [],
-              data: Buffer.from("test-memo", 'utf8'),
-            }],
+            compiledInstructions: [
+              {
+                programIdIndex: 1,
+                accountKeyIndexes: [],
+                data: Buffer.from("test-memo", "utf8"),
+              },
+            ],
             addressTableLookups: [],
           })
         );
-        
-        const base64String = Buffer.from(versionedTx.serialize()).toString('base64');
-        
+
+        const base64String = Buffer.from(versionedTx.serialize()).toString(
+          "base64"
+        );
+
         // This should return null because it's not a valid protocol meta
         const result = adapter.getProtocolMeta(base64String);
         expect(result).toBeNull();
@@ -684,18 +914,20 @@ describe("SolanaAdapter", () => {
           id: "test-hash",
           int: keypair.publicKey.toString(),
         };
-        
+
         // Create a transaction with valid protocol meta
         const tx = new Transaction();
         tx.recentBlockhash = "11111111111111111111111111111111";
         tx.feePayer = keypair.publicKey;
-        
+
         // Add memo instruction with protocol meta using the proper format
         const metaIx = SolanaAdapter.createProtocolMetaIx(meta);
         tx.add(metaIx);
-        
-        const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
-        
+
+        const base64String = Buffer.from(
+          tx.serialize({ requireAllSignatures: false })
+        ).toString("base64");
+
         const result = adapter.parseMeta(base64String);
         expect(result).toEqual(meta);
       });
@@ -709,27 +941,29 @@ describe("SolanaAdapter", () => {
           expiresAt: Date.now() + 3600000, // 1 hour from now
           timestamp: Date.now(),
         };
-        
+
         const meta: ProtocolMetaFields = {
           ver: 2,
           id: codeHash("test-code"),
           int: keypair.publicKey.toString(),
         };
-        
+
         // Create transaction with matching meta
         const tx = new Transaction();
         tx.recentBlockhash = "11111111111111111111111111111111";
         tx.feePayer = keypair.publicKey;
-        
+
         const metaIx = SolanaAdapter.createProtocolMetaIx({
           ver: 2,
           id: codeHash("test-code"),
           int: keypair.publicKey.toString(),
         });
         tx.add(metaIx);
-        
-        const base64String = Buffer.from(tx.serialize({requireAllSignatures: false})).toString('base64');
-        
+
+        const base64String = Buffer.from(
+          tx.serialize({ requireAllSignatures: false })
+        ).toString("base64");
+
         // Should not throw
         expect(() => {
           adapter.verifyTransactionMatchesCode(actionCode, base64String);
@@ -742,29 +976,42 @@ describe("SolanaAdapter", () => {
         const originalTx = new Transaction();
         originalTx.recentBlockhash = "11111111111111111111111111111111";
         originalTx.feePayer = keypair.publicKey;
-        
-        const originalBase64 = Buffer.from(originalTx.serialize({requireAllSignatures: false})).toString('base64');
-        const originalTxCopy = Transaction.from(Buffer.from(originalBase64, 'base64'));
-        
+
+        const originalBase64 = Buffer.from(
+          originalTx.serialize({ requireAllSignatures: false })
+        ).toString("base64");
+        const originalTxCopy = Transaction.from(
+          Buffer.from(originalBase64, "base64")
+        );
+
         const meta: ProtocolMetaFields = {
           ver: 2,
           id: "test-hash",
           int: keypair.publicKey.toString(),
         };
-        
+
         // Attach protocol meta
-        const newBase64 = SolanaAdapter.attachProtocolMeta(originalBase64, meta);
-        
+        const newBase64 = SolanaAdapter.attachProtocolMeta(
+          originalBase64,
+          meta
+        );
+
         // Original string should be unchanged
         expect(newBase64).not.toBe(originalBase64);
-        
+
         // Original transaction should be unchanged
-        const originalTxAfter = Transaction.from(Buffer.from(originalBase64, 'base64'));
-        expect(originalTxAfter.instructions.length).toBe(originalTxCopy.instructions.length);
-        
+        const originalTxAfter = Transaction.from(
+          Buffer.from(originalBase64, "base64")
+        );
+        expect(originalTxAfter.instructions.length).toBe(
+          originalTxCopy.instructions.length
+        );
+
         // New transaction should have one more instruction (the memo)
-        const newTx = Transaction.from(Buffer.from(newBase64, 'base64'));
-        expect(newTx.instructions.length).toBe(originalTxCopy.instructions.length + 1);
+        const newTx = Transaction.from(Buffer.from(newBase64, "base64"));
+        expect(newTx.instructions.length).toBe(
+          originalTxCopy.instructions.length + 1
+        );
       });
 
       test("should preserve signatures in versioned transaction", () => {
@@ -781,21 +1028,28 @@ describe("SolanaAdapter", () => {
             addressTableLookups: [],
           })
         );
-        
+
         // Add a fake signature
         versionedTx.signatures = [new Uint8Array(64).fill(1)];
-        
-        const originalBase64 = Buffer.from(versionedTx.serialize()).toString('base64');
-        
+
+        const originalBase64 = Buffer.from(versionedTx.serialize()).toString(
+          "base64"
+        );
+
         const meta: ProtocolMetaFields = {
           ver: 2,
           id: "test-hash",
           int: keypair.publicKey.toString(),
         };
-        
-        const newBase64 = SolanaAdapter.attachProtocolMeta(originalBase64, meta);
-        const newTx = VersionedTransaction.deserialize(Buffer.from(newBase64, 'base64'));
-        
+
+        const newBase64 = SolanaAdapter.attachProtocolMeta(
+          originalBase64,
+          meta
+        );
+        const newTx = VersionedTransaction.deserialize(
+          Buffer.from(newBase64, "base64")
+        );
+
         // Signatures should be preserved
         expect(newTx.signatures).toEqual(versionedTx.signatures);
       });

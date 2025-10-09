@@ -16,6 +16,12 @@ export interface CanonicalMessageParts {
   secret?: string; // Base64 encoded secret
 }
 
+export interface CanonicalRevokeMessageParts {
+  pubkey: string;
+  codeHash: string;
+  windowStart: number;
+}
+
 export interface CodeGenerationConfig {
   codeLength: number; // characters (Base32)
   ttlMs: number; // default 2 minutes

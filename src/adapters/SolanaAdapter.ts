@@ -8,7 +8,12 @@ import {
   MessageV0,
 } from "@solana/web3.js";
 import { createMemoInstruction, MEMO_PROGRAM_ID } from "@solana/spl-memo";
-import { BaseChainAdapter, type ChainWalletStrategyContext, type ChainDelegationStrategyContext } from "./BaseChainAdapter";
+import {
+  BaseChainAdapter,
+  type ChainWalletStrategyContext,
+  type ChainWalletStrategyRevokeContext,
+  type ChainDelegationStrategyContext,
+} from "./BaseChainAdapter";
 import {
   buildProtocolMeta,
   parseProtocolMeta,
@@ -17,7 +22,10 @@ import {
 import { codeHash } from "../utils/crypto";
 import type { ActionCode } from "../types";
 import { ProtocolError } from "../errors";
-import { serializeCanonical } from "../utils/canonical";
+import {
+  serializeCanonical,
+  serializeCanonicalRevoke,
+} from "../utils/canonical";
 import { DelegationStrategy } from "../strategy/DelegationStrategy";
 
 export type SolanaContext = {
@@ -28,7 +36,11 @@ export type SolanaContext = {
 /** Union of supported Solana txn types */
 export type SolanaTransaction = Transaction | VersionedTransaction;
 
-export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext> {
+export class SolanaAdapter extends BaseChainAdapter<
+  SolanaContext,
+  SolanaContext,
+  SolanaContext
+> {
   /** Normalize pubkey input to PublicKey */
   private normalizePubkey(input: string | PublicKey): PublicKey {
     if (typeof input === "string") {
@@ -38,7 +50,9 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
   }
 
   /** Verify the signature over canonical message (protocol-level) */
-  verifyWithWallet(context: ChainWalletStrategyContext<SolanaContext>): boolean {
+  verifyWithWallet(
+    context: ChainWalletStrategyContext<SolanaContext>
+  ): boolean {
     // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
     if (!context.pubkey || !context.signature || !context.canonicalMessageParts)
@@ -50,12 +64,12 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
       const pub = this.normalizePubkey(context.pubkey);
       const sigBytes = bs58.decode(context.signature);
       const pubBytes = pub.toBytes();
-      
+
       // Validate lengths
       if (sigBytes.length !== 64 || pubBytes.length !== 32) {
         return false;
       }
-      
+
       // Perform signature verification
       return nacl.sign.detached.verify(message, sigBytes, pubBytes);
     } catch {
@@ -65,7 +79,9 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
   }
 
   /** Verify delegation certificate signature */
-  verifyWithDelegation(context: ChainDelegationStrategyContext<SolanaContext>): boolean {
+  verifyWithDelegation(
+    context: ChainDelegationStrategyContext<SolanaContext>
+  ): boolean {
     // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
     if (!context.pubkey || !context.signature || !context.certificate)
@@ -93,19 +109,55 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
         issuedAt: cert.issuedAt,
         expiresAt: cert.expiresAt,
         nonce: cert.nonce,
-        chain: cert.chain
+        chain: cert.chain,
       };
-      const message = DelegationStrategy.serializeCertificate(certWithoutSignature);
-      
+      const message =
+        DelegationStrategy.serializeCertificate(certWithoutSignature);
+
       const pub = this.normalizePubkey(context.pubkey);
       const sigBytes = bs58.decode(context.signature);
       const pubBytes = pub.toBytes();
-      
+
       // Validate lengths
       if (sigBytes.length !== 64 || pubBytes.length !== 32) {
         return false;
       }
-      
+
+      // Perform signature verification
+      return nacl.sign.detached.verify(message, sigBytes, pubBytes);
+    } catch {
+      // All errors result in false with consistent timing
+      return false;
+    }
+  }
+
+  /** Verify the signature over canonical revoke message (protocol-level) */
+  verifyRevokeWithWallet(
+    context: ChainWalletStrategyRevokeContext<SolanaContext>
+  ): boolean {
+    // Early validation checks - these are fast and don't leak timing info
+    if (context.chain !== "solana") return false;
+    if (
+      !context.pubkey ||
+      !context.signature ||
+      !context.canonicalRevokeMessageParts
+    )
+      return false;
+
+    // Perform all operations in a single try-catch to ensure consistent timing
+    try {
+      const message = serializeCanonicalRevoke(
+        context.canonicalRevokeMessageParts
+      );
+      const pub = this.normalizePubkey(context.pubkey);
+      const sigBytes = bs58.decode(context.signature);
+      const pubBytes = pub.toBytes();
+
+      // Validate lengths
+      if (sigBytes.length !== 64 || pubBytes.length !== 32) {
+        return false;
+      }
+
       // Perform signature verification
       return nacl.sign.detached.verify(message, sigBytes, pubBytes);
     } catch {
@@ -147,22 +199,26 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
   private deserializeTransaction(txString: string): SolanaTransaction {
     try {
       // Try versioned first (most common now)
-      const versionedTx = VersionedTransaction.deserialize(Buffer.from(txString, 'base64'));
-      
+      const versionedTx = VersionedTransaction.deserialize(
+        Buffer.from(txString, "base64")
+      );
+
       // Check if this is actually a versioned transaction by checking if it has a MessageV0
       if (versionedTx.message instanceof MessageV0) {
         return versionedTx;
       } else {
         // This is likely a legacy transaction that was incorrectly deserialized as versioned
         // Fall back to legacy deserialization
-        return Transaction.from(Buffer.from(txString, 'base64'));
+        return Transaction.from(Buffer.from(txString, "base64"));
       }
     } catch {
       try {
         // Fallback to legacy
-        return Transaction.from(Buffer.from(txString, 'base64'));
+        return Transaction.from(Buffer.from(txString, "base64"));
       } catch {
-        throw ProtocolError.invalidTransactionFormat('Invalid base64 transaction format');
+        throw ProtocolError.invalidTransactionFormat(
+          "Invalid base64 transaction format"
+        );
       }
     }
   }
@@ -214,10 +270,7 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
    * Validate that a base64-encoded transaction's memo meta aligns with the bound `actionCode`.
    * Throws ProtocolError if validation fails.
    */
-  verifyTransactionMatchesCode(
-    actionCode: ActionCode,
-    txString: string
-  ): void {
+  verifyTransactionMatchesCode(actionCode: ActionCode, txString: string): void {
     // Check expiration first
     const currentTime = Date.now();
     if (currentTime > actionCode.expiresAt) {
@@ -337,73 +390,81 @@ export class SolanaAdapter extends BaseChainAdapter<SolanaContext, SolanaContext
     const existingMeta = adapter.getProtocolMeta(txString);
     if (existingMeta) {
       throw ProtocolError.invalidTransactionFormat(
-        'Transaction already contains protocol meta. Cannot attach additional protocol meta.'
+        "Transaction already contains protocol meta. Cannot attach additional protocol meta."
       );
     }
 
     const metaIx = SolanaAdapter.createProtocolMetaIx(meta);
-    
+
     try {
       // Try to deserialize as versioned first
-      const versionedTx = VersionedTransaction.deserialize(Buffer.from(txString, 'base64'));
-      
+      const versionedTx = VersionedTransaction.deserialize(
+        Buffer.from(txString, "base64")
+      );
+
       // Check if this is actually a versioned transaction by checking if it has a MessageV0
       if (versionedTx.message instanceof MessageV0) {
         const msg = versionedTx.message;
 
-      // Extend static account keys with programId if missing
-      const newStaticKeys = [...msg.staticAccountKeys];
-      if (!newStaticKeys.some((k) => k.equals(MEMO_PROGRAM_ID))) {
-        newStaticKeys.push(MEMO_PROGRAM_ID);
-      }
+        // Extend static account keys with programId if missing
+        const newStaticKeys = [...msg.staticAccountKeys];
+        if (!newStaticKeys.some((k) => k.equals(MEMO_PROGRAM_ID))) {
+          newStaticKeys.push(MEMO_PROGRAM_ID);
+        }
 
-      // Program ID index
-      const programIdIndex = newStaticKeys.findIndex((k) =>
-        k.equals(MEMO_PROGRAM_ID)
-      );
+        // Program ID index
+        const programIdIndex = newStaticKeys.findIndex((k) =>
+          k.equals(MEMO_PROGRAM_ID)
+        );
 
-      // Memo instruction as compiled instruction
-      const compiledIx = {
-        programIdIndex,
-        accountKeyIndexes: [],
-        data: metaIx.data,
-      };
+        // Memo instruction as compiled instruction
+        const compiledIx = {
+          programIdIndex,
+          accountKeyIndexes: [],
+          data: metaIx.data,
+        };
 
-      const newMsg = new MessageV0({
-        header: msg.header,
-        staticAccountKeys: newStaticKeys,
-        recentBlockhash: msg.recentBlockhash,
-        compiledInstructions: [...msg.compiledInstructions, compiledIx],
-        addressTableLookups: msg.addressTableLookups,
-      });
+        const newMsg = new MessageV0({
+          header: msg.header,
+          staticAccountKeys: newStaticKeys,
+          recentBlockhash: msg.recentBlockhash,
+          compiledInstructions: [...msg.compiledInstructions, compiledIx],
+          addressTableLookups: msg.addressTableLookups,
+        });
 
-      // Re-wrap in VersionedTransaction
-      const newTx = new VersionedTransaction(newMsg);
-      // Preserve existing signatures if any
-      newTx.signatures = versionedTx.signatures;
-      
-        return Buffer.from(newTx.serialize()).toString('base64');
+        // Re-wrap in VersionedTransaction
+        const newTx = new VersionedTransaction(newMsg);
+        // Preserve existing signatures if any
+        newTx.signatures = versionedTx.signatures;
+
+        return Buffer.from(newTx.serialize()).toString("base64");
       } else {
         // This is likely a legacy transaction that was incorrectly deserialized as versioned
         // Fall back to legacy deserialization
-        const legacyTx = Transaction.from(Buffer.from(txString, 'base64'));
-        
+        const legacyTx = Transaction.from(Buffer.from(txString, "base64"));
+
         // Legacy tx: just push memo instruction
         legacyTx.add(metaIx);
-        
-        return Buffer.from(legacyTx.serialize({requireAllSignatures: false})).toString('base64');
+
+        return Buffer.from(
+          legacyTx.serialize({ requireAllSignatures: false })
+        ).toString("base64");
       }
     } catch {
       try {
         // Fallback to legacy transaction
-        const legacyTx = Transaction.from(Buffer.from(txString, 'base64'));
-        
+        const legacyTx = Transaction.from(Buffer.from(txString, "base64"));
+
         // Legacy tx: just push memo instruction
         legacyTx.add(metaIx);
-        
-        return Buffer.from(legacyTx.serialize({requireAllSignatures: false})).toString('base64');
+
+        return Buffer.from(
+          legacyTx.serialize({ requireAllSignatures: false })
+        ).toString("base64");
       } catch {
-        throw ProtocolError.invalidTransactionFormat('Invalid base64 transaction format');
+        throw ProtocolError.invalidTransactionFormat(
+          "Invalid base64 transaction format"
+        );
       }
     }
   }

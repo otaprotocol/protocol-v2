@@ -2,6 +2,7 @@ import { ActionCodesProtocol } from "../src/ActionCodesProtocol";
 import {
   BaseChainAdapter,
   type ChainWalletStrategyContext,
+  type ChainWalletStrategyRevokeContext,
 } from "../src/adapters/BaseChainAdapter";
 import { SolanaAdapter, SolanaContext } from "../src/adapters/SolanaAdapter";
 import { Transaction, Keypair } from "@solana/web3.js";
@@ -12,7 +13,8 @@ import { DelegationStrategy } from "../src/strategy/DelegationStrategy";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { codeHash } from "../src/utils/crypto";
-import { DelegationCertificate } from "../src/types";
+import { DelegationCertificate, ActionCode } from "../src/types";
+import { serializeCanonicalRevoke } from "../src/utils/canonical";
 
 // Helper function to create a real signature for testing
 function createRealSignature(message: Uint8Array, keypair: Keypair): string {
@@ -39,14 +41,17 @@ describe("ActionCodesProtocol", () => {
     });
 
     test("can register custom adapters", () => {
-      class CustomAdapter extends BaseChainAdapter<any, any> {
+      class CustomAdapter extends BaseChainAdapter<any, any, any> {
         verifyWithWallet(context: ChainWalletStrategyContext<any>): boolean {
           return true;
         }
         verifyWithDelegation(context: ChainWalletStrategyContext<any>): boolean {
           return true;
         }
-      }
+        verifyRevokeWithWallet(context: ChainWalletStrategyRevokeContext<any>): boolean {
+          return true;
+        }
+      } 
       const customAdapter = new CustomAdapter() as unknown as ChainAdapter;
       protocol.registerAdapter(
         "custom",
@@ -479,6 +484,9 @@ describe("ActionCodesProtocol", () => {
 
         const result = protocolWithTtl.generateCode("wallet", canonicalMessage, signature);
         const actualTtl = result.actionCode.expiresAt - result.actionCode.timestamp;
+        if (!result.actionCode || !result.canonicalMessage) {
+          throw new Error("Invalid result");
+        }
         
         expect(actualTtl).toBe(config.ttlMs);
       }
@@ -509,7 +517,7 @@ describe("ActionCodesProtocol", () => {
     });
 
     test("handles rapid code generation with consistent expiration", async () => {
-      const results = [];
+      const results: { actionCode: ActionCode; canonicalMessage: Uint8Array }[] = [];
       const startTime = Date.now();
 
       // Generate multiple codes rapidly
@@ -558,6 +566,120 @@ describe("ActionCodesProtocol", () => {
         // Verify the timestamp matches the window start
         expect(result.actionCode.timestamp).toBe(actualWindowStart);
         expect(result.actionCode.expiresAt).toBe(actualWindowStart + 120000);
+      }
+    });
+  });
+
+  describe("revoke verification integration", () => {
+    test("verifyRevokeWithWallet works with real action code", async () => {
+      // 1. Generate a real action code using the protocol
+      const canonicalMessage = protocol.getCanonicalMessageParts(testKeypair.publicKey.toString());
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+      const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
+
+      // 2. Get the real code hash and timestamp from the generated action code
+      const realCodeHash = codeHash(actionCode.code);
+      const canonicalRevokeMessageParts = {
+        pubkey: actionCode.pubkey,
+        codeHash: realCodeHash,
+        windowStart: actionCode.timestamp,
+      };
+
+      // 3. Create a revoke message and sign it
+      const revokeMessage = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+      const revokeSignature = createRealSignature(revokeMessage, testKeypair);
+
+      // 4. Create context for revoke verification
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: testKeypair.publicKey,
+        signature: revokeSignature,
+        canonicalRevokeMessageParts,
+      };
+
+      // 5. Verify the revoke signature using the Solana adapter
+      const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
+      const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
+      
+      expect(verifyResult).toBe(true);
+    });
+
+    test("verifyRevokeWithWallet rejects invalid revoke signature", async () => {
+      // 1. Generate a real action code using the protocol
+      const canonicalMessage = protocol.getCanonicalMessageParts(testKeypair.publicKey.toString());
+      const signature = createRealSignature(canonicalMessage, testKeypair);
+      const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
+
+      // 2. Get the real code hash and timestamp from the generated action code
+      const realCodeHash = codeHash(actionCode.code);
+      const canonicalRevokeMessageParts = {
+        pubkey: actionCode.pubkey,
+        codeHash: realCodeHash,
+        windowStart: actionCode.timestamp,
+      };
+
+      // 3. Create a revoke message but sign it with a different keypair
+      const differentKeypair = Keypair.generate();
+      const revokeMessage = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+      const wrongSignature = createRealSignature(revokeMessage, differentKeypair);
+
+      // 4. Create context for revoke verification with wrong signature
+      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        chain: "solana",
+        pubkey: testKeypair.publicKey, // Original pubkey
+        signature: wrongSignature, // But signed by different keypair
+        canonicalRevokeMessageParts,
+      };
+
+      // 5. Verify the revoke signature should fail
+      const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
+      const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
+      
+      expect(verifyResult).toBe(false);
+    });
+
+    test("verifyRevokeWithWallet works with different code hashes", async () => {
+      const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
+      
+      // Test with multiple different action codes
+      const testCodes = ["12345678", "87654321", "ABCDEFGH", "ZYXWVUTS"];
+      
+      for (const code of testCodes) {
+        // 1. Generate action code with specific code
+        const canonicalMessage = protocol.getCanonicalMessageParts(testKeypair.publicKey.toString());
+        const signature = createRealSignature(canonicalMessage, testKeypair);
+        
+        // Mock the code generation to use our specific code
+        const mockActionCode: ActionCode = {
+          code,
+          pubkey: testKeypair.publicKey.toString(),
+          timestamp: Math.floor(Date.now() / 120000) * 120000,
+          expiresAt: Math.floor(Date.now() / 120000) * 120000 + 120000,
+          signature,
+        };
+
+        // 2. Get the real code hash
+        const realCodeHash = codeHash(mockActionCode.code);
+        const canonicalRevokeMessageParts = {
+          pubkey: mockActionCode.pubkey,
+          codeHash: realCodeHash,
+          windowStart: mockActionCode.timestamp,
+        };
+
+        // 3. Create and sign revoke message
+        const revokeMessage = serializeCanonicalRevoke(canonicalRevokeMessageParts);
+        const revokeSignature = createRealSignature(revokeMessage, testKeypair);
+
+        // 4. Verify revoke signature
+        const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+          chain: "solana",
+          pubkey: testKeypair.publicKey,
+          signature: revokeSignature,
+          canonicalRevokeMessageParts,
+        };
+
+        const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
+        expect(verifyResult).toBe(true);
       }
     });
   });
