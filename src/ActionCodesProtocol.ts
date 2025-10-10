@@ -6,12 +6,12 @@ import type {
 } from "./types";
 import type {
   ChainAdapter,
-  ChainWalletStrategyContext,
-  ChainDelegationStrategyContext,
+  WalletContext,
+  DelegatedContext,
 } from "./adapters/BaseChainAdapter";
 import { WalletStrategy } from "./strategy/WalletStrategy";
 import { DelegationStrategy } from "./strategy/DelegationStrategy";
-import { SolanaAdapter, type SolanaContext } from "./adapters/SolanaAdapter";
+import { SolanaAdapter } from "./adapters/SolanaAdapter";
 import { ProtocolError } from "./errors";
 
 export class ActionCodesProtocol {
@@ -21,7 +21,7 @@ export class ActionCodesProtocol {
 
   constructor(private readonly config: CodeGenerationConfig) {
     // Register default adapters
-    this.adapters.solana = new SolanaAdapter() as ChainAdapter<SolanaContext>;
+    this.adapters.solana = new SolanaAdapter() as unknown as ChainAdapter;
 
     // Initialize strategies
     this._walletStrategy = new WalletStrategy(config);
@@ -112,22 +112,17 @@ export class ActionCodesProtocol {
   validateCode(
     strategy: "wallet",
     actionCode: ActionCode,
-    context?: Omit<ChainWalletStrategyContext<unknown>, "canonicalMessageParts">
+    context?: WalletContext<unknown>
   ): void;
   validateCode(
     strategy: "delegation",
     actionCode: DelegatedActionCode,
-    context?: Omit<
-      ChainDelegationStrategyContext<unknown>,
-      "canonicalMessageParts"
-    >
+    context?: DelegatedContext<unknown>
   ): void;
   validateCode(
     strategy: "wallet" | "delegation",
     actionCode: ActionCode | DelegatedActionCode,
-    param2?:
-      | Omit<ChainWalletStrategyContext<unknown>, "canonicalMessageParts">
-      | Omit<ChainDelegationStrategyContext<unknown>, "canonicalMessageParts">
+    param2?: WalletContext<unknown> | DelegatedContext<unknown>
   ): void {
     if (strategy === "wallet") {
       // This will throw if validation fails
@@ -135,29 +130,23 @@ export class ActionCodesProtocol {
 
       if (!param2) return;
 
-      const context = param2 as Omit<
-        ChainWalletStrategyContext<unknown>,
-        "canonicalMessageParts"
-      >;
+      const context = param2 as Omit<WalletContext<unknown>, "message">;
       const adapter = this.getAdapter(context.chain);
       if (!adapter) throw ProtocolError.invalidAdapter(context.chain);
 
       const ok = adapter.verifyWithWallet({
-        ...context,
-        canonicalMessageParts: {
-          pubkey: actionCode.pubkey,
-          windowStart: actionCode.timestamp,
+        ...(context as Record<string, unknown>),
+        message: {
+          pubkey: (actionCode as ActionCode).pubkey,
+          windowStart: (actionCode as ActionCode).timestamp,
         },
-      } as unknown as ChainWalletStrategyContext<unknown>);
+      } as unknown as WalletContext<unknown>);
 
       if (!ok) {
         throw new Error("Signature verification failed");
       }
     } else {
-      const context = param2 as Omit<
-        ChainDelegationStrategyContext<unknown>,
-        "canonicalMessageParts"
-      >;
+      const context = param2 as Omit<DelegatedContext<unknown>, "message">;
 
       // CRITICAL: First validate the delegated action code
       // This ensures the code was actually generated from this delegation proof
@@ -170,9 +159,13 @@ export class ActionCodesProtocol {
       const adapter = this.getAdapter(context.chain);
       if (!adapter) throw ProtocolError.invalidAdapter(context.chain);
 
-      const ok = adapter.verifyWithDelegation(
-        context as unknown as ChainDelegationStrategyContext<unknown>
-      );
+      const ok = adapter.verifyWithDelegation({
+        ...(context as Record<string, unknown>),
+        message: {
+          pubkey: (actionCode as ActionCode).pubkey,
+          windowStart: (actionCode as ActionCode).timestamp,
+        },
+      } as unknown as DelegatedContext<unknown>);
 
       if (!ok) {
         throw new Error("Signature verification failed");

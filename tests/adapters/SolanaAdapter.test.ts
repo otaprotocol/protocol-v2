@@ -1,6 +1,5 @@
 import {
   Keypair,
-  PublicKey,
   Transaction,
   VersionedTransaction,
   MessageV0,
@@ -10,15 +9,15 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import {
   SolanaAdapter,
-  type SolanaContext,
+  type SolanaWalletContext,
+  type SolanaWalletRevokeContext,
+  type SolanaDelegatedContext,
+  type SolanaDelegatedRevokeContext,
 } from "../../src/adapters/SolanaAdapter";
-import {
-  type ChainWalletStrategyContext,
-  type ChainWalletStrategyRevokeContext,
-} from "../../src/adapters/BaseChainAdapter";
 import {
   serializeCanonical,
   serializeCanonicalRevoke,
+  serializeDelegationProof,
 } from "../../src/utils/canonical";
 import { codeHash } from "../../src/utils/crypto";
 import type { ActionCode } from "../../src/types";
@@ -43,10 +42,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(message, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyContext<SolanaContext> = {
+      const context: SolanaWalletContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalMessageParts,
+        message: canonicalMessageParts,
+        walletSignature: signatureB58,
       };
 
       const result = adapter.verifyWithWallet(context);
@@ -63,10 +62,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(message, wrongKeypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyContext<SolanaContext> = {
+      const context: SolanaWalletContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalMessageParts,
+        message: canonicalMessageParts,
+        walletSignature: signatureB58,
       };
 
       const result = adapter.verifyWithWallet(context);
@@ -83,18 +82,18 @@ describe("SolanaAdapter", () => {
       const signatureB58 = bs58.encode(signature);
 
       // Test with PublicKey object
-      const context1: ChainWalletStrategyContext<SolanaContext> = {
+      const context1: SolanaWalletContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalMessageParts,
+        message: canonicalMessageParts,
+        walletSignature: signatureB58,
       };
       expect(adapter.verifyWithWallet(context1)).toBe(true);
 
       // Test with base58 string
-      const context2: ChainWalletStrategyContext<SolanaContext> = {
+      const context2: SolanaWalletContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalMessageParts,
+        message: canonicalMessageParts,
+        walletSignature: signatureB58,
       };
       expect(adapter.verifyWithWallet(context2)).toBe(true);
     });
@@ -111,10 +110,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(message, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: signatureB58,
       };
 
       const result = adapter.verifyRevokeWithWallet(context);
@@ -132,10 +131,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(message, wrongKeypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: signatureB58,
       };
 
       const result = adapter.verifyRevokeWithWallet(context);
@@ -153,18 +152,18 @@ describe("SolanaAdapter", () => {
       const signatureB58 = bs58.encode(signature);
 
       // Test with PublicKey object
-      const context1: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context1: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: signatureB58,
       };
       expect(adapter.verifyRevokeWithWallet(context1)).toBe(true);
 
       // Test with base58 string
-      const context2: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context2: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: signatureB58,
       };
       expect(adapter.verifyRevokeWithWallet(context2)).toBe(true);
     });
@@ -179,10 +178,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(message, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
-        chain: "ethereum", // Wrong chain
-        signature: signatureB58,
-        canonicalRevokeMessageParts,
+      const context: SolanaWalletRevokeContext = {
+        chain: "ethereum" as any, // Wrong chain
+        message: canonicalRevokeMessageParts,
+        walletSignature: signatureB58,
       };
 
       const result = adapter.verifyRevokeWithWallet(context);
@@ -197,26 +196,26 @@ describe("SolanaAdapter", () => {
       };
 
       // Missing signature
-      const context1: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context1: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: "", // Empty signature
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: "", // Empty signature
       };
       expect(adapter.verifyRevokeWithWallet(context1)).toBe(false);
 
       // Missing pubkey
-      const context2: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context2: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: "some-signature",
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: "some-signature",
       };
       expect(adapter.verifyRevokeWithWallet(context2)).toBe(false);
 
       // Missing canonicalRevokeMessageParts
-      const context3: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context3: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: "some-signature",
-        canonicalRevokeMessageParts: null as any, // Missing parts
+        message: null as any, // Missing parts
+        walletSignature: "some-signature",
       };
       expect(adapter.verifyRevokeWithWallet(context3)).toBe(false);
     });
@@ -228,10 +227,10 @@ describe("SolanaAdapter", () => {
         windowStart: Date.now(),
       };
 
-      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context: SolanaWalletRevokeContext = {
         chain: "solana",
-        signature: "invalid-base58-signature", // Invalid base58
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: "invalid-base58-signature", // Invalid base58
       };
 
       const result = adapter.verifyRevokeWithWallet(context);
@@ -257,10 +256,10 @@ describe("SolanaAdapter", () => {
         const signature = nacl.sign.detached(message, keypair.secretKey);
         const signatureB58 = bs58.encode(signature);
 
-        const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        const context: SolanaWalletRevokeContext = {
           chain: "solana",
-          signature: signatureB58,
-          canonicalRevokeMessageParts,
+          message: canonicalRevokeMessageParts,
+          walletSignature: signatureB58,
         };
 
         const result = adapter.verifyRevokeWithWallet(context);
@@ -740,10 +739,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(canonicalMessage, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyContext<SolanaContext> = {
+      const context: SolanaWalletContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalMessageParts,
+        message: canonicalMessageParts,
+        walletSignature: signatureB58,
       };
 
       // Verify the signature
@@ -763,10 +762,10 @@ describe("SolanaAdapter", () => {
       const signature = nacl.sign.detached(canonicalMessage, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
 
-      const context: ChainWalletStrategyContext<SolanaContext> = {
+      const context: SolanaWalletContext = {
         chain: "solana",
-        signature: signatureB58,
-        canonicalMessageParts,
+        message: canonicalMessageParts,
+        walletSignature: signatureB58,
       };
 
       // Test different batch sizes
@@ -1036,6 +1035,341 @@ describe("SolanaAdapter", () => {
 
         // Signatures should be preserved
         expect(newTx.signatures).toEqual(versionedTx.signatures);
+      });
+    });
+  });
+
+  describe("delegation verification methods", () => {
+    let walletKeypair: Keypair;
+    let delegatedKeypair: Keypair;
+
+    beforeEach(() => {
+      walletKeypair = Keypair.generate();
+      delegatedKeypair = Keypair.generate();
+    });
+
+    describe("verifyWithDelegation", () => {
+      test("verifyWithDelegation returns true for valid signatures", () => {
+        // Create delegation proof
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000, // 1 hour from now
+          signature: "", // Will be filled below
+        };
+
+        // Wallet signs the delegation proof
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        // Create canonical message for action code
+        const canonicalMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          windowStart: Date.now(),
+        };
+
+        // Delegated key signs the canonical message
+        const canonicalMessage = serializeCanonical(canonicalMessageParts);
+        const delegatedSignature = nacl.sign.detached(canonicalMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedContext = {
+          chain: "solana",
+          message: canonicalMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyWithDelegation(context);
+        expect(result).toBe(true);
+      });
+
+      test("verifyWithDelegation returns false for invalid wallet signature", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          signature: "invalid-signature", // Invalid signature
+        };
+
+        const canonicalMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          windowStart: Date.now(),
+        };
+
+        const canonicalMessage = serializeCanonical(canonicalMessageParts);
+        const delegatedSignature = nacl.sign.detached(canonicalMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedContext = {
+          chain: "solana",
+          message: canonicalMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyWithDelegation(context);
+        expect(result).toBe(false);
+      });
+
+      test("verifyWithDelegation returns false for invalid delegated signature", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          signature: "", // Will be filled below
+        };
+
+        // Wallet signs the delegation proof correctly
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        const canonicalMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          windowStart: Date.now(),
+        };
+
+        const context: SolanaDelegatedContext = {
+          chain: "solana",
+          message: canonicalMessageParts,
+          delegatedSignature: "invalid-delegated-signature", // Invalid signature
+          delegationProof,
+        };
+
+        const result = adapter.verifyWithDelegation(context);
+        expect(result).toBe(false);
+      });
+
+      test("verifyWithDelegation returns false for expired delegation", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() - 3600000, // 1 hour ago (expired)
+          signature: "", // Will be filled below
+        };
+
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        const canonicalMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          windowStart: Date.now(),
+        };
+
+        const canonicalMessage = serializeCanonical(canonicalMessageParts);
+        const delegatedSignature = nacl.sign.detached(canonicalMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedContext = {
+          chain: "solana",
+          message: canonicalMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyWithDelegation(context);
+        expect(result).toBe(false);
+      });
+
+      test("verifyWithDelegation returns false for mismatched delegated pubkey", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          signature: "", // Will be filled below
+        };
+
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        // Use different pubkey in message than in delegation proof
+        const canonicalMessageParts = {
+          pubkey: walletKeypair.publicKey.toString(), // Different from delegatedPubkey
+          windowStart: Date.now(),
+        };
+
+        const canonicalMessage = serializeCanonical(canonicalMessageParts);
+        const delegatedSignature = nacl.sign.detached(canonicalMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedContext = {
+          chain: "solana",
+          message: canonicalMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyWithDelegation(context);
+        expect(result).toBe(false);
+      });
+    });
+
+    describe("verifyRevokeWithDelegation", () => {
+      test("verifyRevokeWithDelegation returns true for valid signatures", () => {
+        // Create delegation proof
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000, // 1 hour from now
+          signature: "", // Will be filled below
+        };
+
+        // Wallet signs the delegation proof
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        // Create revoke message
+        const revokeMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          codeHash: "test-code-hash",
+          windowStart: Date.now(),
+        };
+
+        // Delegated key signs the revoke message
+        const revokeMessage = serializeCanonicalRevoke(revokeMessageParts);
+        const delegatedSignature = nacl.sign.detached(revokeMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedRevokeContext = {
+          chain: "solana",
+          message: revokeMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyRevokeWithDelegation(context);
+        expect(result).toBe(true);
+      });
+
+      test("verifyRevokeWithDelegation returns false for invalid wallet signature", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          signature: "invalid-wallet-signature", // Invalid signature
+        };
+
+        const revokeMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          codeHash: "test-code-hash",
+          windowStart: Date.now(),
+        };
+
+        const revokeMessage = serializeCanonicalRevoke(revokeMessageParts);
+        const delegatedSignature = nacl.sign.detached(revokeMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedRevokeContext = {
+          chain: "solana",
+          message: revokeMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyRevokeWithDelegation(context);
+        expect(result).toBe(false);
+      });
+
+      test("verifyRevokeWithDelegation returns false for invalid delegated signature", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          signature: "", // Will be filled below
+        };
+
+        // Wallet signs the delegation proof correctly
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        const revokeMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          codeHash: "test-code-hash",
+          windowStart: Date.now(),
+        };
+
+        const context: SolanaDelegatedRevokeContext = {
+          chain: "solana",
+          message: revokeMessageParts,
+          delegatedSignature: "invalid-delegated-signature", // Invalid signature
+          delegationProof,
+        };
+
+        const result = adapter.verifyRevokeWithDelegation(context);
+        expect(result).toBe(false);
+      });
+
+      test("verifyRevokeWithDelegation returns false for expired delegation", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() - 3600000, // 1 hour ago (expired)
+          signature: "", // Will be filled below
+        };
+
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        const revokeMessageParts = {
+          pubkey: delegatedKeypair.publicKey.toString(),
+          codeHash: "test-code-hash",
+          windowStart: Date.now(),
+        };
+
+        const revokeMessage = serializeCanonicalRevoke(revokeMessageParts);
+        const delegatedSignature = nacl.sign.detached(revokeMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedRevokeContext = {
+          chain: "solana",
+          message: revokeMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyRevokeWithDelegation(context);
+        expect(result).toBe(false);
+      });
+
+      test("verifyRevokeWithDelegation returns false for mismatched delegated pubkey", () => {
+        const delegationProof = {
+          walletPubkey: walletKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          signature: "", // Will be filled below
+        };
+
+        const delegationMessage = serializeDelegationProof(delegationProof);
+        const walletSignature = nacl.sign.detached(delegationMessage, walletKeypair.secretKey);
+        delegationProof.signature = bs58.encode(walletSignature);
+
+        // Use different pubkey in revoke message than in delegation proof
+        const revokeMessageParts = {
+          pubkey: walletKeypair.publicKey.toString(), // Different from delegatedPubkey
+          codeHash: "test-code-hash",
+          windowStart: Date.now(),
+        };
+
+        const revokeMessage = serializeCanonicalRevoke(revokeMessageParts);
+        const delegatedSignature = nacl.sign.detached(revokeMessage, delegatedKeypair.secretKey);
+        const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
+        const context: SolanaDelegatedRevokeContext = {
+          chain: "solana",
+          message: revokeMessageParts,
+          delegatedSignature: delegatedSignatureB58,
+          delegationProof,
+        };
+
+        const result = adapter.verifyRevokeWithDelegation(context);
+        expect(result).toBe(false);
       });
     });
   });

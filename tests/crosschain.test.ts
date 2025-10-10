@@ -80,9 +80,9 @@ describe("Cross-Chain Compatibility", () => {
 
       // Verify with Solana adapter
       const isValid = solanaAdapter.verifyWithWallet({
-        canonicalMessageParts,
+        message: canonicalMessageParts,
         chain: "solana",
-        signature: signatureB58,
+        walletSignature: signatureB58,
       });
 
       expect(isValid).toBe(true);
@@ -293,9 +293,9 @@ describe("Cross-Chain Compatibility", () => {
       const signatureB58 = bs58.encode(signature);
 
       const isValid = solanaAdapter.verifyWithWallet({
-        canonicalMessageParts,
+        message: canonicalMessageParts,
         chain: "solana",
-        signature: signatureB58,
+        walletSignature: signatureB58,
       });
 
       expect(isValid).toBe(true);
@@ -351,17 +351,17 @@ describe("Cross-Chain Compatibility", () => {
       // Each adapter should only accept its own signature type
       expect(
         solanaAdapter.verifyWithWallet({
-          canonicalMessageParts,
+          message: canonicalMessageParts,
           chain: "solana",
-          signature: solanaSignature,
+          walletSignature: solanaSignature,
         })
       ).toBe(true);
 
       expect(
         solanaAdapter.verifyWithWallet({
-          canonicalMessageParts,
+          message: canonicalMessageParts,
           chain: "solana",
-          signature: rsaSignature, // Wrong signature type
+          walletSignature: rsaSignature, // Wrong signature type
         })
       ).toBe(false);
 

@@ -1,38 +1,58 @@
-import type { CanonicalMessageParts, CanonicalRevokeMessageParts, DelegationProof } from "../types";
+import type {
+  CanonicalMessageParts,
+  CanonicalRevokeMessageParts,
+  DelegationProof,
+} from "../types";
 
-// Chain context and adapter interface live here to avoid coupling core types to chain specifics.
-export interface BaseWalletStrategyContext {
+export interface BaseContext {
   chain: string;
-  // Canonical message bytes used for signature verification
-  canonicalMessageParts: CanonicalMessageParts;
 }
 
-export interface BaseDelegationContext {
-  chain: string;
-  pubkey: string;
-  signature: string;
-  delegationProof: DelegationProof;
-  delegatedSignature: string;
-  canonicalMessageParts: CanonicalMessageParts;
+export type WalletContext<TChain = unknown> = BaseContext &
+  TChain & {
+    message: CanonicalMessageParts;
+    walletSignature: string;
+  };
+
+export type DelegatedContext<TChain = unknown> = BaseContext &
+  TChain & {
+    message: CanonicalMessageParts;
+    delegatedSignature: string;
+    delegationProof: DelegationProof;
+  };
+
+export type WalletRevokeContext<TChain = unknown> = BaseContext &
+  TChain & {
+    message: CanonicalRevokeMessageParts;
+    walletSignature: string;
+  };
+
+export type DelegatedRevokeContext<TChain = unknown> = BaseContext &
+  TChain & {
+    message: CanonicalRevokeMessageParts;
+    delegatedSignature: string;
+    delegationProof: DelegationProof;
+  };
+
+export interface ChainAdapter<
+  TW = unknown,
+  DW = unknown,
+  RW = unknown,
+  RD = unknown
+> {
+  verifyWithWallet(context: WalletContext<TW>): boolean;
+  verifyWithDelegation(context: DelegatedContext<DW>): boolean;
+  verifyRevokeWithWallet(context: WalletRevokeContext<RW>): boolean;
+  verifyRevokeWithDelegation(context: DelegatedRevokeContext<RD>): boolean;
 }
 
-export interface BaseWalletStrategyRevokeContext {
-  chain: string;
-  // Canonical revoke message bytes used for signature verification
-  canonicalRevokeMessageParts: CanonicalRevokeMessageParts;
-}
-
-export type ChainWalletStrategyContext<T> = BaseWalletStrategyContext & T;
-export type ChainWalletStrategyRevokeContext<T> = BaseWalletStrategyRevokeContext & T;
-export type ChainDelegationStrategyContext<T> = BaseDelegationContext & T;
-export interface ChainAdapter<TCtx = unknown, DCtx = unknown, RCtx = unknown> {
-  verifyWithWallet(context: ChainWalletStrategyContext<TCtx>): boolean;
-  verifyWithDelegation(context: ChainDelegationStrategyContext<DCtx>): boolean;
-  verifyRevokeWithWallet(context: ChainWalletStrategyRevokeContext<RCtx>): boolean;
-}
-
-export abstract class BaseChainAdapter<TCtx, DCtx, RCtx> implements ChainAdapter<TCtx, DCtx, RCtx> {
-  abstract verifyWithWallet(context: ChainWalletStrategyContext<TCtx>): boolean;
-  abstract verifyWithDelegation(context: ChainDelegationStrategyContext<DCtx>): boolean;
-  abstract verifyRevokeWithWallet(context: ChainWalletStrategyRevokeContext<RCtx>): boolean;
+export abstract class BaseChainAdapter<TW, DW, RW, RD>
+  implements ChainAdapter<TW, DW, RW, RD>
+{
+  abstract verifyWithWallet(context: WalletContext<TW>): boolean;
+  abstract verifyWithDelegation(context: DelegatedContext<DW>): boolean;
+  abstract verifyRevokeWithWallet(context: WalletRevokeContext<RW>): boolean;
+  abstract verifyRevokeWithDelegation(
+    context: DelegatedRevokeContext<RD>
+  ): boolean;
 }

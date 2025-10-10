@@ -524,17 +524,23 @@ describe("ActionCodesProtocol", () => {
       expect(() => {
         protocol.validateCode("wallet", userCode, {
           chain: "solana",
-          pubkey: userPubkey,
-          signature: userSignature,
-        } as unknown as ChainWalletStrategyContext<SolanaContext>);
+          message: {
+            pubkey: userCode.pubkey,
+            windowStart: userCode.timestamp,
+          },
+          walletSignature: userSignature,
+        });
       }).not.toThrow();
 
       expect(() => {
         protocol.validateCode("wallet", attackerCode, {
           chain: "solana",
-          pubkey: userPubkey,
-          signature: attackerSignature,
-        } as unknown as ChainWalletStrategyContext<SolanaContext>);
+          message: {
+            pubkey: attackerCode.pubkey,
+            windowStart: attackerCode.timestamp,
+          },
+          walletSignature: attackerSignature,
+        });
       }).toThrow("Signature verification failed");
     });
   });
@@ -730,10 +736,10 @@ describe("ActionCodesProtocol", () => {
       );
 
       // 4. User provides the signature for verification (this is the input from user)
-      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context = {
         chain: "solana",
-        signature: userRevokeSignature, // This is the signature the user provides
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: userRevokeSignature, // This is the signature the user provides
       };
 
       // 5. System verifies the user's revoke signature
@@ -826,10 +832,10 @@ describe("ActionCodesProtocol", () => {
         const revokeSignature = createRealSignature(revokeMessage, testKeypair);
 
         // 4. Verify revoke signature
-        const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+        const context = {
           chain: "solana",
-          signature: revokeSignature,
-          canonicalRevokeMessageParts,
+          message: canonicalRevokeMessageParts,
+          walletSignature: revokeSignature,
         };
 
         const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
@@ -858,10 +864,10 @@ describe("ActionCodesProtocol", () => {
       // 3. User submits the revoke request to the system
       // System verifies the user's revoke signature
       const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
-      const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
+      const context = {
         chain: "solana",
-        signature: userRevokeSignature, // User provided this signature
-        canonicalRevokeMessageParts,
+        message: canonicalRevokeMessageParts,
+        walletSignature: userRevokeSignature, // User provided this signature
       };
 
       const verifyResult = solanaAdapter.verifyRevokeWithWallet(context);
