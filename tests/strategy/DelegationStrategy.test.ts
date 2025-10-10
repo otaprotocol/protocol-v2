@@ -1,9 +1,8 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 import { DelegationStrategy } from "../../src/strategy/DelegationStrategy";
-import { ActionCodesProtocol } from "../../src/ActionCodesProtocol";
 import { SolanaAdapter } from "../../src/adapters/SolanaAdapter";
 import { generateNonce } from "../../src/utils/crypto";
-import { serializeCanonical } from "../../src/utils/canonical";
+import { serializeCanonical, serializeCertificate } from "../../src/utils/canonical";
 import type {
   DelegationCertificate,
   DelegatedActionCode,
@@ -49,7 +48,7 @@ describe("DelegationStrategy", () => {
     );
 
     // Create a valid certificate template
-    const template = DelegationStrategy.createDelegationCertificateTemplate(
+    const template = strategy.createDelegationCertificateTemplate(
       mockWallet.publicKey,
       "delegated-pubkey",
       3600000, // 1 hour
@@ -57,7 +56,7 @@ describe("DelegationStrategy", () => {
     );
     
     // Sign the certificate with the mock wallet
-    const message = DelegationStrategy.serializeCertificate(template);
+    const message = serializeCertificate(template);
     const signature = await mockWallet.signMessage(message);
     
     certificate = {
@@ -68,7 +67,7 @@ describe("DelegationStrategy", () => {
 
   describe("createDelegationCertificateTemplate", () => {
     it("should create a valid certificate template", () => {
-      const template = DelegationStrategy.createDelegationCertificateTemplate(
+      const template = strategy.createDelegationCertificateTemplate(
         "test-pubkey",
         "delegated-pubkey",
         3600000,
@@ -87,7 +86,7 @@ describe("DelegationStrategy", () => {
     it("should use current time for issuedAt", () => {
       const before = Date.now();
       const template =
-        DelegationStrategy.createDelegationCertificateTemplate("test-pubkey", "delegated-pubkey");
+        strategy.createDelegationCertificateTemplate("test-pubkey", "delegated-pubkey");
       const after = Date.now();
 
       expect(template.issuedAt).toBeGreaterThanOrEqual(before);
@@ -95,7 +94,7 @@ describe("DelegationStrategy", () => {
     });
 
     it("should set correct expiration time", () => {
-      const template = DelegationStrategy.createDelegationCertificateTemplate(
+      const template = strategy.createDelegationCertificateTemplate(
         "test-pubkey",
         "delegated-pubkey",
         7200000 // 2 hours
@@ -113,7 +112,7 @@ describe("DelegationStrategy", () => {
       expect(result.actionCode.code).toBeDefined();
       expect(result.actionCode.pubkey).toBe(mockWallet.publicKey);
       expect(result.actionCode.delegationId).toBe(
-        DelegationStrategy.hashCertificate(certificate)
+        strategy.hashCertificate(certificate)
       );
       expect(result.actionCode.delegatedBy).toBe(mockWallet.publicKey);
     });
@@ -129,14 +128,14 @@ describe("DelegationStrategy", () => {
     });
 
     it("should generate different codes for different certificates", async () => {
-      const template2 = DelegationStrategy.createDelegationCertificateTemplate(
+      const template2 = strategy.createDelegationCertificateTemplate(
         mockWallet.publicKey,
         "delegated-pubkey-2",
         3600000,
         "solana"
       );
       
-      const message2 = DelegationStrategy.serializeCertificate(template2);
+      const message2 = serializeCertificate(template2);
       const signature2 = await mockWallet.signMessage(message2);
       
       const certificate2 = {
@@ -155,13 +154,13 @@ describe("DelegationStrategy", () => {
 
     it("should throw error for expired certificate", async () => {
       const expiredTemplate =
-        DelegationStrategy.createDelegationCertificateTemplate(
+        strategy.createDelegationCertificateTemplate(
           mockWallet.publicKey,
           "delegated-pubkey",
           -1000 // Expired 1 second ago
         );
       
-      const message = DelegationStrategy.serializeCertificate(expiredTemplate);
+      const message = serializeCertificate(expiredTemplate);
       const signature = await mockWallet.signMessage(message);
       
       const expiredCertificate = {
@@ -176,7 +175,7 @@ describe("DelegationStrategy", () => {
 
     it("should throw error for future certificate", async () => {
       const futureTemplate =
-        DelegationStrategy.createDelegationCertificateTemplate(
+        strategy.createDelegationCertificateTemplate(
           mockWallet.publicKey,
           "delegated-pubkey",
           3600000
@@ -187,7 +186,7 @@ describe("DelegationStrategy", () => {
         issuedAt: Date.now() + 3600000, // Issued 1 hour in the future
       };
       
-      const message = DelegationStrategy.serializeCertificate(
+      const message = serializeCertificate(
         futureTemplateWithFutureTime
       );
       const signature = await mockWallet.signMessage(message);
@@ -367,7 +366,7 @@ describe("DelegationStrategy", () => {
       private registeredCertificates = new Map<string, DelegationCertificate>();
 
       registerCertificate(certificate: DelegationCertificate): string {
-        const certificateId = DelegationStrategy.hashCertificate(certificate);
+        const certificateId = strategy.hashCertificate(certificate);
         this.registeredCertificates.set(certificateId, certificate);
         return certificateId;
       }
@@ -408,7 +407,7 @@ describe("DelegationStrategy", () => {
 
         // This should fail because hash includes signature
         const certificateSecret =
-          DelegationStrategy.hashCertificate(certWithoutSig);
+        strategy.hashCertificate(certWithoutSig);
 
         // Try to generate code (this will produce wrong result)
         const windowStart = Math.floor(Date.now() / 300000) * 300000; // 5 min window
@@ -578,13 +577,13 @@ describe("DelegationStrategy", () => {
 
     it("should have different delegation IDs for different certificates", async () => {
       // 1. Create Certificate A (with valid signature)
-      const templateA = DelegationStrategy.createDelegationCertificateTemplate(
+      const templateA = strategy.createDelegationCertificateTemplate(
         mockWallet.publicKey,
         "delegated-pubkey",
         3600000,
         "solana"
       );
-      const messageA = DelegationStrategy.serializeCertificate(templateA);
+      const messageA = serializeCertificate(templateA);
       const signatureA = await mockWallet.signMessage(messageA);
       const certificateA: DelegationCertificate = {
         ...templateA,
@@ -592,13 +591,13 @@ describe("DelegationStrategy", () => {
       };
 
       // 2. Create Certificate B (with valid signature)
-      const templateB = DelegationStrategy.createDelegationCertificateTemplate(
+      const templateB = strategy.createDelegationCertificateTemplate(
         mockWallet.publicKey,
         "delegated-pubkey-2",
         3600000,
         "solana"
       );
-      const messageB = DelegationStrategy.serializeCertificate(templateB);
+      const messageB = serializeCertificate(templateB);
       const signatureB = await mockWallet.signMessage(messageB);
       const certificateB: DelegationCertificate = {
         ...templateB,
@@ -668,13 +667,13 @@ describe("DelegationStrategy", () => {
       const stolenDelegationId = validCode.delegationId;
 
       // 3. Create different Certificate B
-      const templateB = DelegationStrategy.createDelegationCertificateTemplate(
+      const templateB = strategy.createDelegationCertificateTemplate(
         mockWallet.publicKey,
         "delegated-pubkey-2",
         3600000,
         "solana"
       );
-      const messageB = DelegationStrategy.serializeCertificate(templateB);
+      const messageB = serializeCertificate(templateB);
       const signatureB = await mockWallet.signMessage(messageB);
       const certificateB: DelegationCertificate = {
         ...templateB,
@@ -769,7 +768,7 @@ describe("DelegationStrategy", () => {
 
     beforeEach(() => {
       // Create delegation certificate where user delegates to Passkey
-      const template = DelegationStrategy.createDelegationCertificateTemplate(
+      const template = strategy.createDelegationCertificateTemplate(
         mockUserKeypair.publicKey,
         mockPasskeyKeypair.publicKey, // Passkey is the delegated keypair
         3600000, // 1 hour
@@ -811,7 +810,7 @@ describe("DelegationStrategy", () => {
 
     test("should reject Passkey code with wrong certificate", () => {
       // Create different certificate
-      const differentTemplate = DelegationStrategy.createDelegationCertificateTemplate(
+      const differentTemplate = strategy.createDelegationCertificateTemplate(
         "different-user-pubkey",
         "different-passkey-pubkey",
         3600000,
@@ -838,7 +837,7 @@ describe("DelegationStrategy", () => {
         nonce: passkeyCertificate.nonce,
         chain: passkeyCertificate.chain,
       };
-      const certMessage = DelegationStrategy.serializeCertificate(certWithoutSignature);
+        const certMessage = serializeCertificate(certWithoutSignature);
       
       // In real implementation, this would verify the user's signature
       expect(certMessage).toBeDefined();
@@ -863,7 +862,7 @@ describe("DelegationStrategy", () => {
     test("should support multiple Passkeys for same user", () => {
       // User delegates to second Passkey
       const secondPasskeyPubkey = "second-passkey-pubkey-54321";
-      const secondTemplate = DelegationStrategy.createDelegationCertificateTemplate(
+      const secondTemplate = strategy.createDelegationCertificateTemplate(
         mockUserKeypair.publicKey,
         secondPasskeyPubkey,
         3600000,
@@ -888,7 +887,7 @@ describe("DelegationStrategy", () => {
 
     test("should handle Passkey expiration correctly", () => {
       // Create expired certificate
-      const expiredTemplate = DelegationStrategy.createDelegationCertificateTemplate(
+      const expiredTemplate = strategy.createDelegationCertificateTemplate(
         mockUserKeypair.publicKey,
         mockPasskeyKeypair.publicKey,
         -1000, // Expired 1 second ago
@@ -913,7 +912,7 @@ describe("DelegationStrategy", () => {
 
       // Server verification steps:
       // 1. Verify certificate signature (User's signature)
-      const certValid = DelegationStrategy.validateCertificateStructure(serverReceivedCertificate);
+      const certValid = strategy.validateCertificateStructure(serverReceivedCertificate);
       expect(certValid).toBe(true);
 
       // 2. Verify certificate is not expired
@@ -924,7 +923,7 @@ describe("DelegationStrategy", () => {
       // 3. Verify action code matches certificate
       expect(serverReceivedCode.delegatedBy).toBe(serverReceivedCertificate.delegator);
       expect(serverReceivedCode.delegatedPubkey).toBe(serverReceivedCertificate.delegatedPubkey);
-      expect(serverReceivedCode.delegationId).toBe(DelegationStrategy.hashCertificate(serverReceivedCertificate));
+      expect(serverReceivedCode.delegationId).toBe(strategy.hashCertificate(serverReceivedCertificate));
 
       // 4. Verify action code signature (Passkey's signature)
       expect(serverReceivedCode.delegatedSignature).toBeDefined();
@@ -955,7 +954,7 @@ describe("DelegationStrategy", () => {
     test("should handle Passkey revocation scenario", () => {
       // User revokes Passkey delegation by creating new certificate without the Passkey
       const newPasskeyPubkey = "new-passkey-pubkey-99999";
-      const newTemplate = DelegationStrategy.createDelegationCertificateTemplate(
+      const newTemplate = strategy.createDelegationCertificateTemplate(
         mockUserKeypair.publicKey,
         newPasskeyPubkey, // Different Passkey
         3600000,
@@ -1000,7 +999,7 @@ describe("DelegationStrategy", () => {
       console.log(`   Public Key: ${passkeyKeypair.publicKey}`);
       
       // Step 2: Create delegation certificate
-      const template = DelegationStrategy.createDelegationCertificateTemplate(
+      const template = strategy.createDelegationCertificateTemplate(
         mockUserKeypair.publicKey,
         passkeyKeypair.publicKey, // Real Ed25519 public key
         3600000,
@@ -1076,7 +1075,7 @@ describe("DelegationStrategy", () => {
       console.log(`   Algorithm: ${p256Passkey.algorithm}`);
       
       // Step 2: Create delegation certificate
-      const template = DelegationStrategy.createDelegationCertificateTemplate(
+      const template = strategy.createDelegationCertificateTemplate(
         mockUserKeypair.publicKey,
         p256Passkey.publicKey,
         3600000,
@@ -1137,7 +1136,7 @@ describe("DelegationStrategy", () => {
         console.log(`\nTesting with ${chain} chain:`);
         
         // Create certificate for this chain
-        const template = DelegationStrategy.createDelegationCertificateTemplate(
+        const template = strategy.createDelegationCertificateTemplate(
           mockUserKeypair.publicKey,
           universalPasskey.publicKey,
           3600000,

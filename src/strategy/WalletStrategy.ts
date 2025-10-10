@@ -3,9 +3,17 @@ import type {
   CodeGenerationConfig,
   WalletStrategyCodeGenerationResult,
 } from "../types";
-import { sha256, hmacSha256, truncateBits, digestToDigits } from "../utils/crypto";
+import {
+  sha256,
+  hmacSha256,
+  truncateBits,
+  digestToDigits,
+} from "../utils/crypto";
 import { CODE_MAX_LENGTH, CODE_MIN_LENGTH } from "../constants";
-import { serializeCanonical } from "../utils/canonical";
+import {
+  serializeCanonical,
+  getCanonicalMessageParts,
+} from "../utils/canonical";
 import { ProtocolError } from "../errors";
 import bs58 from "bs58";
 
@@ -15,18 +23,18 @@ export class WalletStrategy {
   generateCode(
     canonicalMessage: Uint8Array,
     signature: string,
-    providedSecret?: string,
+    providedSecret?: string
   ): WalletStrategyCodeGenerationResult {
     const canonical = canonicalMessage;
-    
+
     // Parse pubkey and windowStart from canonical message
     const decoded = JSON.parse(new TextDecoder().decode(canonical));
     const pubkey = decoded.pubkey;
     const windowStart = decoded.windowStart;
-    
+
     // Only use secret if explicitly provided
     const secret = providedSecret;
-    
+
     // Use signature if provided, otherwise fall back to secret/HMAC
     let digest: Uint8Array;
     if (signature) {
@@ -41,7 +49,7 @@ export class WalletStrategy {
       // Fall back to SHA256 (less secure)
       digest = sha256(canonical);
     }
-    
+
     const clamped = Math.max(
       CODE_MIN_LENGTH,
       Math.min(CODE_MAX_LENGTH, this.config.codeLength)
@@ -67,15 +75,19 @@ export class WalletStrategy {
   validateCode(actionCode: ActionCode): void {
     const currentTime = Date.now();
     if (currentTime > actionCode.expiresAt + (this.config.clockSkewMs ?? 0)) {
-      throw ProtocolError.expiredCode(actionCode.code, actionCode.expiresAt, currentTime);
+      throw ProtocolError.expiredCode(
+        actionCode.code,
+        actionCode.expiresAt,
+        currentTime
+      );
     }
-    
+
     const canonical = serializeCanonical({
       pubkey: actionCode.pubkey,
       windowStart: actionCode.timestamp,
       secret: actionCode.secret, // Include secret if available
     });
-    
+
     // Use same digest method as generation
     let digest: Uint8Array;
     if (actionCode.signature) {
@@ -90,16 +102,24 @@ export class WalletStrategy {
       // Fall back to SHA256 (less secure)
       digest = sha256(canonical);
     }
-    
+
     const clamped = Math.max(
       CODE_MIN_LENGTH,
       Math.min(CODE_MAX_LENGTH, this.config.codeLength)
     );
     const truncated = truncateBits(digest, 8 * Math.ceil(clamped / 2));
     const expected = digestToDigits(truncated, clamped);
-    
+
     if (expected !== actionCode.code) {
       throw ProtocolError.invalidCode(expected, actionCode.code);
     }
+  }
+
+  // Instance method for accessing canonical functions
+  getCanonicalMessageParts(
+    pubkey: string,
+    providedSecret?: string
+  ): Uint8Array {
+    return getCanonicalMessageParts(pubkey, this.config.ttlMs, providedSecret);
   }
 }

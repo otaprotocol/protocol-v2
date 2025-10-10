@@ -10,7 +10,7 @@ import { Transaction } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
 import type { ProtocolMetaFields } from "../src/utils/protocolMeta";
-import { serializeCanonical } from "../src/utils/canonical";
+import { serializeCanonical, getCanonicalMessageParts } from "../src/utils/canonical";
 
 describe("Cross-Chain Compatibility", () => {
   let protocol: ActionCodesProtocol;
@@ -36,7 +36,7 @@ describe("Cross-Chain Compatibility", () => {
   describe("Multi-Chain Code Generation", () => {
     test("generates same codes across different chains", () => {
       const pubkey = "test-pubkey-crosschain";
-      const canonicalMessage = protocol.getCanonicalMessageParts(pubkey);
+      const canonicalMessage = getCanonicalMessageParts(pubkey, protocol.getConfig().ttlMs);
       const signature = bs58.encode(nacl.sign.detached(canonicalMessage, Keypair.generate().secretKey));
 
       // Generate code once
@@ -51,7 +51,7 @@ describe("Cross-Chain Compatibility", () => {
     test("generates different codes for different pubkeys", () => {
       const pubkeys = ["solana-pubkey", "ethereum-pubkey", "bitcoin-pubkey"];
       const codes = pubkeys.map((pubkey) => {
-        const canonicalMessage = protocol.getCanonicalMessageParts(pubkey);
+        const canonicalMessage = getCanonicalMessageParts(pubkey, protocol.getConfig().ttlMs);
         const signature = bs58.encode(nacl.sign.detached(canonicalMessage, Keypair.generate().secretKey));
         return protocol.generateCode("wallet", canonicalMessage, signature).actionCode.code;
       });
@@ -65,7 +65,7 @@ describe("Cross-Chain Compatibility", () => {
   describe("Solana Chain Integration", () => {
     test("validates codes with Solana adapter", () => {
       const keypair = Keypair.generate();
-      const canonicalMessage = protocol.getCanonicalMessageParts(keypair.publicKey.toString());
+      const canonicalMessage = getCanonicalMessageParts(keypair.publicKey.toString(), protocol.getConfig().ttlMs);
       const signature = nacl.sign.detached(canonicalMessage, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
       const { actionCode } = protocol.generateCode(
@@ -90,7 +90,7 @@ describe("Cross-Chain Compatibility", () => {
 
     test("creates and validates Solana transactions with protocol meta", () => {
       const keypair = Keypair.generate();
-      const canonicalMessage = protocol.getCanonicalMessageParts(keypair.publicKey.toString());
+      const canonicalMessage = getCanonicalMessageParts(keypair.publicKey.toString(), protocol.getConfig().ttlMs);
       const signature = nacl.sign.detached(canonicalMessage, keypair.secretKey);
       const signatureB58 = bs58.encode(signature);
       const { actionCode } = protocol.generateCode(
@@ -135,7 +135,7 @@ describe("Cross-Chain Compatibility", () => {
         format: "pem",
       }) as string;
 
-      const canonicalMessage = protocol.getCanonicalMessageParts(pubkeyString);
+      const canonicalMessage = getCanonicalMessageParts(pubkeyString, protocol.getConfig().ttlMs);
       const canonicalMessageParts = {
         pubkey: pubkeyString,
         windowStart: Math.floor(Date.now() / 120000) * 120000,
@@ -165,7 +165,7 @@ describe("Cross-Chain Compatibility", () => {
       const { publicKey, privateKey } = NodeCryptoAdapter.generateKeyPair();
       const shortId = "test-pubkey-123"; // Use short ID for both action code and protocol meta
 
-      const canonicalMessage = protocol.getCanonicalMessageParts(shortId);
+      const canonicalMessage = getCanonicalMessageParts(shortId, protocol.getConfig().ttlMs);
       const signature = NodeCryptoAdapter.signMessage(canonicalMessage, privateKey);
       const { actionCode } = protocol.generateCode("wallet", canonicalMessage, signature);
 
@@ -203,7 +203,7 @@ describe("Cross-Chain Compatibility", () => {
   describe("Cross-Chain Protocol Validation", () => {
     test("validates same action code across different chains", async () => {
       const pubkey = "crosschain-test-pubkey";
-      const canonicalMessage = protocol.getCanonicalMessageParts(pubkey);
+      const canonicalMessage = getCanonicalMessageParts(pubkey, protocol.getConfig().ttlMs);
       const signature = bs58.encode(nacl.sign.detached(canonicalMessage, Keypair.generate().secretKey));
       const { actionCode } = protocol.generateCode("wallet", canonicalMessage, signature);
 

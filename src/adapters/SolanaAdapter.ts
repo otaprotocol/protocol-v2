@@ -25,8 +25,9 @@ import { ProtocolError } from "../errors";
 import {
   serializeCanonical,
   serializeCanonicalRevoke,
+  serializeCertificate,
+  validateCertificateStructure,
 } from "../utils/canonical";
-import { DelegationStrategy } from "../strategy/DelegationStrategy";
 
 export type SolanaContext = {
   signature: string; // base58
@@ -54,7 +55,11 @@ export class SolanaAdapter extends BaseChainAdapter<
   ): boolean {
     // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
-    if (!context.canonicalMessageParts.pubkey || !context.signature || !context.canonicalMessageParts)
+    if (
+      !context.canonicalMessageParts.pubkey ||
+      !context.signature ||
+      !context.canonicalMessageParts
+    )
       return false;
 
     // Perform all operations in a single try-catch to ensure consistent timing
@@ -89,7 +94,7 @@ export class SolanaAdapter extends BaseChainAdapter<
     const cert = context.certificate;
 
     // Use strategy for chain-agnostic certificate validation
-    if (!DelegationStrategy.validateCertificateStructure(cert)) {
+    if (!validateCertificateStructure(cert)) {
       return false;
     }
 
@@ -111,8 +116,7 @@ export class SolanaAdapter extends BaseChainAdapter<
         nonce: cert.nonce,
         chain: cert.chain,
       };
-      const message =
-        DelegationStrategy.serializeCertificate(certWithoutSignature);
+      const message = serializeCertificate(certWithoutSignature);
 
       const pub = this.normalizePubkey(context.pubkey);
       const sigBytes = bs58.decode(context.signature);
@@ -149,7 +153,9 @@ export class SolanaAdapter extends BaseChainAdapter<
       const message = serializeCanonicalRevoke(
         context.canonicalRevokeMessageParts
       );
-      const pub = this.normalizePubkey(context.canonicalRevokeMessageParts.pubkey);
+      const pub = this.normalizePubkey(
+        context.canonicalRevokeMessageParts.pubkey
+      );
       const sigBytes = bs58.decode(context.signature);
       const pubBytes = pub.toBytes();
 

@@ -3,6 +3,8 @@ import { SolanaAdapter } from "../src/adapters/SolanaAdapter";
 import { Keypair } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { getCanonicalMessageParts } from "../src/utils/canonical";
+
 describe("Security Review", () => {
   let protocol: ActionCodesProtocol;
 
@@ -15,7 +17,7 @@ describe("Security Review", () => {
 
   describe("no sensitive data in logs", () => {
     test("ActionCode objects only contain public data", async () => {
-      const canonicalMessage = protocol.getCanonicalMessageParts("test-pubkey");
+      const canonicalMessage = getCanonicalMessageParts("test-pubkey", protocol.getConfig().ttlMs);
       const signature = "testsignature";
       const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
@@ -37,7 +39,7 @@ describe("Security Review", () => {
     });
 
     test("canonical messages are safe to serialize", async () => {
-      const canonicalMessage = protocol.getCanonicalMessageParts("test-pubkey");
+      const canonicalMessage = getCanonicalMessageParts("test-pubkey", protocol.getConfig().ttlMs);
       const signature = "testsignature";
       const { canonicalMessage: generatedMessage } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
@@ -211,7 +213,7 @@ describe("Security Review", () => {
 
   describe("memory safety", () => {
     test("does not retain sensitive data in memory", async () => {
-      const canonicalMessage = protocol.getCanonicalMessageParts("test-pubkey");
+      const canonicalMessage = getCanonicalMessageParts("test-pubkey", protocol.getConfig().ttlMs);
       const signature = "testsignature";
       const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
       

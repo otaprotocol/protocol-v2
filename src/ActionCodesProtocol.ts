@@ -12,7 +12,6 @@ import { WalletStrategy } from "./strategy/WalletStrategy";
 import { DelegationStrategy } from "./strategy/DelegationStrategy";
 import { SolanaAdapter, type SolanaContext } from "./adapters/SolanaAdapter";
 import { ProtocolError } from "./errors";
-import { serializeCanonical } from "./utils/canonical";
 
 export class ActionCodesProtocol {
   private adapters: Record<string, ChainAdapter> = {};
@@ -54,28 +53,8 @@ export class ActionCodesProtocol {
     return this._walletStrategy;
   }
 
-  // @deprecated remove this method, instead use serializeCanonical directly
-  /** Get canonical message parts for signing (before code generation) */
-  getCanonicalMessageParts(pubkey: string, providedSecret?: string): Uint8Array {
-    const windowStart = Math.floor(Date.now() / this.config.ttlMs) * this.config.ttlMs;
-    return serializeCanonical({ pubkey, windowStart, secret: providedSecret });
-  }
-
   get delegationStrategy() {
     return this._delegationStrategy;
-  }
-
-  // Delegation Strategy Methods
-  createDelegationCertificateTemplate(
-    userPublicKey: string,
-    durationMs: number = 3600000,
-    chain: string = "solana"
-  ): Omit<DelegationCertificate, "signature"> {
-    return DelegationStrategy.createDelegationCertificateTemplate(
-      userPublicKey,
-      durationMs,
-      chain
-    );
   }
 
   // Generate code
@@ -107,9 +86,15 @@ export class ActionCodesProtocol {
     if (strategy === "wallet") {
       // Here param1 must be Uint8Array (canonical message)
       if (!signature) {
-        throw ProtocolError.invalidSignature("Missing signature over canonical message");
+        throw ProtocolError.invalidSignature(
+          "Missing signature over canonical message"
+        );
       }
-      return this.walletStrategy.generateCode(param1 as Uint8Array, signature, providedSecret);
+      return this.walletStrategy.generateCode(
+        param1 as Uint8Array,
+        signature,
+        providedSecret
+      );
     } else {
       // Here param1 must be DelegationCertificate
       if (!signature) {
@@ -166,7 +151,7 @@ export class ActionCodesProtocol {
       }
     } else {
       const certificate = param2 as DelegationCertificate;
-      
+
       // CRITICAL: First validate the delegated action code
       // This ensures the code was actually generated from this certificate
       this.delegationStrategy.validateDelegatedCode(
