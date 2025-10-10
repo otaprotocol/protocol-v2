@@ -23,6 +23,7 @@ export class DelegationStrategy {
    */
   static createDelegationCertificateTemplate(
     userPublicKey: string,
+    delegatedPubkey: string,
     durationMs: number = 3600000, // 1 hour default
     chain: string = "solana"
   ): Omit<DelegationCertificate, "signature"> {
@@ -30,6 +31,7 @@ export class DelegationStrategy {
     return {
       version: "1.0",
       delegator: userPublicKey,
+      delegatedPubkey: delegatedPubkey,
       issuedAt: now,
       expiresAt: now + durationMs,
       nonce: generateNonce(),
@@ -38,11 +40,12 @@ export class DelegationStrategy {
   }
 
   /**
-   * Generate a delegated action code using a signed certificate
+   * Generate a delegated action code using a signed certificate and delegated signature
    * The certificate acts as the secret for deterministic generation
    */
   generateDelegatedCode(
-    certificate: DelegationCertificate
+    certificate: DelegationCertificate,
+    delegatedSignature: string
   ): DelegationStrategyCodeGenerationResult {
     // Validate certificate format and expiration only
     // Signature verification happens in ActionCodesProtocol.validateCode()
@@ -64,7 +67,7 @@ export class DelegationStrategy {
     // Generate code using existing WalletStrategy with canonical message
     const result = this.walletStrategy.generateCode(
       canonicalMessage,
-      "", // No signature for delegation (uses secret instead)
+      delegatedSignature, // Use delegated signature
       certificateSecret // Use certificate hash as secret
     );
 
@@ -73,6 +76,8 @@ export class DelegationStrategy {
       ...result.actionCode,
       delegationId: DelegationStrategy.hashCertificate(certificate),
       delegatedBy: certificate.delegator,
+      delegatedSignature: delegatedSignature,
+      delegatedPubkey: certificate.delegatedPubkey,
     };
 
     return {
@@ -104,6 +109,16 @@ export class DelegationStrategy {
     if (actionCode.delegatedBy !== certificate.delegator) {
       throw new Error("Action code delegator does not match certificate");
     }
+
+    // Verify the delegated pubkey matches
+    if (actionCode.delegatedPubkey !== certificate.delegatedPubkey) {
+      throw new Error("Action code delegated pubkey does not match certificate");
+    }
+
+    // Verify delegated signature is present
+    if (!actionCode.delegatedSignature) {
+      throw new Error("Delegated signature is required");
+    }
   }
 
   /**
@@ -124,6 +139,7 @@ export class DelegationStrategy {
     if (
       !certificate.version ||
       !certificate.delegator ||
+      !certificate.delegatedPubkey ||
       !certificate.issuedAt ||
       !certificate.expiresAt ||
       !certificate.nonce ||
@@ -148,6 +164,7 @@ export class DelegationStrategy {
     const json = JSON.stringify({
       version: cert.version,
       delegator: cert.delegator,
+      delegatedPubkey: cert.delegatedPubkey,
       issuedAt: cert.issuedAt,
       expiresAt: cert.expiresAt,
       nonce: cert.nonce,
@@ -185,6 +202,7 @@ export class DelegationStrategy {
     if (
       !certificate.version ||
       !certificate.delegator ||
+      !certificate.delegatedPubkey ||
       !certificate.issuedAt ||
       !certificate.expiresAt ||
       !certificate.nonce ||

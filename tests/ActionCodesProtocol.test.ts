@@ -45,6 +45,9 @@ function createUserRevokeSignature(
   };
 }
 
+// Mock delegated signature for testing
+const mockDelegatedSignature = bs58.encode(new Uint8Array(64).fill(42));
+
 describe("ActionCodesProtocol", () => {
   let protocol: ActionCodesProtocol;
   let testKeypair: Keypair;
@@ -233,7 +236,7 @@ describe("ActionCodesProtocol", () => {
       };
 
       // Generate delegated code
-      const result = protocol.generateCode("delegation", certificate);
+      const result = protocol.generateCode("delegation", certificate, mockDelegatedSignature);
   
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
@@ -264,7 +267,7 @@ describe("ActionCodesProtocol", () => {
       };
 
       // Generate delegated code
-      const result = protocol.generateCode("delegation", certificate);
+      const result = protocol.generateCode("delegation", certificate, mockDelegatedSignature);
 
       // Validate using protocol's validateCode method (with real signature verification)
       expect(() => {
@@ -311,8 +314,8 @@ describe("ActionCodesProtocol", () => {
       };
 
       // Generate codes for both certificates
-      const result1 = protocol.generateCode("delegation", certificate1);
-      const result2 = protocol.generateCode("delegation", certificate2);
+      const result1 = protocol.generateCode("delegation", certificate1, mockDelegatedSignature);
+      const result2 = protocol.generateCode("delegation", certificate2, mockDelegatedSignature);
 
       // They should be different
       expect(result1.actionCode.code).not.toBe(result2.actionCode.code);
@@ -323,6 +326,7 @@ describe("ActionCodesProtocol", () => {
       // Create an expired certificate
       const expiredTemplate = protocol.createDelegationCertificateTemplate(
         testKeypair.publicKey.toString(),
+        "delegated-pubkey",
         -1000 // Expired 1 second ago
       );
       
@@ -336,7 +340,7 @@ describe("ActionCodesProtocol", () => {
 
       // This should throw when generating code with expired certificate
       expect(() => {
-        protocol.generateCode("delegation", expiredCertificate);
+        protocol.generateCode("delegation", expiredCertificate, mockDelegatedSignature);
       }).toThrow("Invalid delegation certificate");
     });
 
@@ -353,7 +357,7 @@ describe("ActionCodesProtocol", () => {
         ...originalTemplate,
         signature: realSignature,
       };
-      const originalResult = await protocol.generateCode("delegation", originalCertificate);
+      const originalResult = await protocol.generateCode("delegation", originalCertificate, mockDelegatedSignature);
       const originalCode = originalResult.actionCode;
 
       // 2. Create fake certificate with stolen signature but different data
@@ -366,7 +370,7 @@ describe("ActionCodesProtocol", () => {
       };
 
       // 3. Generate code with fake certificate (this should work in strategy layer)
-      const fakeResult = await protocol.generateCode("delegation", fakeCertificate);
+      const fakeResult = await protocol.generateCode("delegation", fakeCertificate, mockDelegatedSignature);
       const fakeCode = fakeResult.actionCode;
 
       // 4. Try to validate fake code with original certificate (should fail)
@@ -388,7 +392,7 @@ describe("ActionCodesProtocol", () => {
         ...originalTemplate,
         signature: realSignature,
       };
-      const originalResult = await protocol.generateCode("delegation", originalCertificate);
+      const originalResult = await protocol.generateCode("delegation", originalCertificate, mockDelegatedSignature);
       const originalCode = originalResult.actionCode;
 
       // 2. Create fake certificate with stolen signature but different delegator
@@ -399,7 +403,7 @@ describe("ActionCodesProtocol", () => {
       };
 
       // 3. Generate code with fake certificate (this should work in strategy layer)
-      const fakeResult = await protocol.generateCode("delegation", fakeCertificate);
+      const fakeResult = await protocol.generateCode("delegation", fakeCertificate, mockDelegatedSignature);
       const fakeCode = fakeResult.actionCode;
 
       // 4. Try to validate fake code with original certificate (should fail)

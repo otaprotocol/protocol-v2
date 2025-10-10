@@ -40,6 +40,7 @@ export interface DelegationStrategyCodeGenerationResult {
 export interface DelegationCertificate {
   version: "1.0";
   delegator: string;        // User's public key
+  delegatedPubkey: string;  // Delegated keypair's public key
   issuedAt: number;         // Unix timestamp
   expiresAt: number;        // Unix timestamp
   nonce: string;            // Prevent replay attacks
@@ -50,5 +51,7 @@ export interface DelegationCertificate {
 export interface DelegatedActionCode extends ActionCode {
   delegationId: string;     // Hash of the certificate
   delegatedBy: string;      // User's public key (same as delegator)
+  delegatedSignature: string; // Signature from delegated keypair
+  delegatedPubkey: string;    // Public key of delegated keypair
 }
 

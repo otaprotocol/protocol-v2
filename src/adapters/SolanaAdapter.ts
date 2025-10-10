@@ -105,6 +105,7 @@ export class SolanaAdapter extends BaseChainAdapter<
       const certWithoutSignature = {
         version: cert.version,
         delegator: cert.delegator,
+        delegatedPubkey: cert.delegatedPubkey,
         issuedAt: cert.issuedAt,
         expiresAt: cert.expiresAt,
         nonce: cert.nonce,

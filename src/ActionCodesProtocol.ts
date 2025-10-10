@@ -90,7 +90,8 @@ export class ActionCodesProtocol {
   };
   generateCode(
     strategy: "delegation",
-    certificate: DelegationCertificate
+    certificate: DelegationCertificate,
+    delegatedSignature: string
   ): {
     actionCode: DelegatedActionCode;
   };
@@ -111,8 +112,12 @@ export class ActionCodesProtocol {
       return this.walletStrategy.generateCode(param1 as Uint8Array, signature, providedSecret);
     } else {
       // Here param1 must be DelegationCertificate
+      if (!signature) {
+        throw ProtocolError.invalidSignature("Missing delegated signature");
+      }
       return this.delegationStrategy.generateDelegatedCode(
-        param1 as DelegationCertificate
+        param1 as DelegationCertificate,
+        signature
       );
     }
   }
