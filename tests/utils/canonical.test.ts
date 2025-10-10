@@ -2,12 +2,10 @@ import { describe, it, expect } from "bun:test";
 import {
   serializeCanonical,
   serializeCanonicalRevoke,
-  createDelegationCertificateTemplate,
-  serializeCertificate,
-  validateCertificateStructure,
+  serializeDelegationProof,
   getCanonicalMessageParts,
 } from "../../src/utils/canonical";
-import type { DelegationCertificate } from "../../src/types";
+import type { DelegationProof } from "../../src/types";
 
 describe("canonical utils", () => {
   describe("serializeCanonical", () => {
@@ -228,237 +226,56 @@ describe("canonical utils", () => {
     });
   });
 
-  describe("createDelegationCertificateTemplate", () => {
-    it("should create valid certificate template", () => {
-      const template = createDelegationCertificateTemplate(
-        "user-pubkey-123",
-        "delegated-pubkey-456",
-        3600000,
-        "solana"
-      );
-
-      expect(template).toEqual({
-        version: "1.0",
-        delegator: "user-pubkey-123",
+  describe("serializeDelegationProof", () => {
+    it("should serialize delegation proof", () => {
+      const proof: DelegationProof = {
+        walletPubkey: "user-pubkey-123",
         delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: expect.any(Number),
-        expiresAt: expect.any(Number),
-        nonce: expect.any(String),
-        chain: "solana",
-      });
-
-      expect(template.issuedAt).toBeLessThanOrEqual(Date.now());
-      expect(template.expiresAt).toBe(template.issuedAt + 3600000);
-      expect(template.nonce).toMatch(/^[A-Za-z0-9+/=]+$/); // Base64-like
-    });
-
-    it("should use current time for issuedAt", () => {
-      const before = Date.now();
-      const template = createDelegationCertificateTemplate(
-        "user-pubkey-123",
-        "delegated-pubkey-456"
-      );
-      const after = Date.now();
-
-      expect(template.issuedAt).toBeGreaterThanOrEqual(before);
-      expect(template.issuedAt).toBeLessThanOrEqual(after);
-    });
-
-    it("should set correct expiration time", () => {
-      const durationMs = 7200000; // 2 hours
-      const template = createDelegationCertificateTemplate(
-        "user-pubkey-123",
-        "delegated-pubkey-456",
-        durationMs
-      );
-
-      expect(template.expiresAt).toBe(template.issuedAt + durationMs);
-    });
-
-    it("should use default values", () => {
-      const template = createDelegationCertificateTemplate(
-        "user-pubkey-123",
-        "delegated-pubkey-456"
-      );
-
-      expect(template.version).toBe("1.0");
-      expect(template.chain).toBe("solana");
-      expect(template.expiresAt - template.issuedAt).toBe(3600000); // 1 hour default
-    });
-
-    it("should generate unique nonces", () => {
-      const templates = Array.from({ length: 10 }, () =>
-        createDelegationCertificateTemplate(
-          "user-pubkey-123",
-          "delegated-pubkey-456"
-        )
-      );
-
-      const nonces = templates.map(t => t.nonce);
-      const uniqueNonces = new Set(nonces);
-      
-      expect(uniqueNonces.size).toBe(nonces.length); // All nonces should be unique
-    });
-  });
-
-
-  describe("serializeCertificate", () => {
-    it("should serialize certificate without signature", () => {
-      const cert = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: 1234567890,
         expiresAt: 1234567890 + 3600000,
-        nonce: "test-nonce-123",
-        chain: "solana",
+        signature: "test-signature-456",
       };
 
-      const result = serializeCertificate(cert);
+      const result = serializeDelegationProof(proof);
       const decoded = JSON.parse(new TextDecoder().decode(result));
 
-      expect(decoded).toEqual(cert);
+      expect(decoded).toEqual({
+        walletPubkey: "user-pubkey-123",
+        delegatedPubkey: "delegated-pubkey-456",
+        expiresAt: 1234567890 + 3600000,
+      });
     });
 
     it("should produce deterministic output", () => {
-      const cert = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
+      const proof: DelegationProof = {
+        walletPubkey: "user-pubkey-123",
         delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: 1234567890,
         expiresAt: 1234567890 + 3600000,
-        nonce: "test-nonce-123",
-        chain: "solana",
+        signature: "test-signature-456",
       };
 
-      const result1 = serializeCertificate(cert);
-      const result2 = serializeCertificate(cert);
+      const result1 = serializeDelegationProof(proof);
+      const result2 = serializeDelegationProof(proof);
 
       expect(result1).toEqual(result2);
     });
 
-    it("should produce different output for different certificates", () => {
-      const cert1 = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
+    it("should produce different output for different proofs", () => {
+      const proof1: DelegationProof = {
+        walletPubkey: "user-pubkey-123",
         delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: 1234567890,
         expiresAt: 1234567890 + 3600000,
-        nonce: "test-nonce-123",
-        chain: "solana",
+        signature: "test-signature-456",
       };
 
-      const cert2 = {
-        ...cert1,
+      const proof2: DelegationProof = {
+        ...proof1,
         delegatedPubkey: "different-delegated-pubkey",
       };
 
-      const result1 = serializeCertificate(cert1);
-      const result2 = serializeCertificate(cert2);
+      const result1 = serializeDelegationProof(proof1);
+      const result2 = serializeDelegationProof(proof2);
 
       expect(result1).not.toEqual(result2);
-    });
-  });
-
-  describe("validateCertificateStructure", () => {
-    it("should validate correct certificate structure", () => {
-      const certificate: DelegationCertificate = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: Date.now() - 1000, // 1 second ago
-        expiresAt: Date.now() + 3600000, // 1 hour from now
-        nonce: "test-nonce-123",
-        chain: "solana",
-        signature: "test-signature-456",
-      };
-
-      expect(validateCertificateStructure(certificate)).toBe(true);
-    });
-
-    it("should reject certificate with missing fields", () => {
-      const incompleteCertificates = [
-        { version: "1.0" }, // Missing most fields
-        { version: "1.0", delegator: "user-pubkey-123" }, // Missing delegatedPubkey
-        { version: "1.0", delegator: "user-pubkey-123", delegatedPubkey: "delegated-pubkey-456" }, // Missing issuedAt
-      ];
-
-      for (const cert of incompleteCertificates) {
-        expect(validateCertificateStructure(cert as any)).toBe(false);
-      }
-    });
-
-    it("should reject certificate with wrong version", () => {
-      const certificate: DelegationCertificate = {
-        version: "2.0", // Wrong version
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: Date.now() - 1000,
-        expiresAt: Date.now() + 3600000,
-        nonce: "test-nonce-123",
-        chain: "solana",
-        signature: "test-signature-456",
-      };
-
-      expect(validateCertificateStructure(certificate)).toBe(false);
-    });
-
-    it("should reject certificate with invalid timing", () => {
-      const now = Date.now();
-      
-      const expiredCertificate: DelegationCertificate = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: now - 2000,
-        expiresAt: now - 1000, // Expired
-        nonce: "test-nonce-123",
-        chain: "solana",
-        signature: "test-signature-456",
-      };
-
-      const futureCertificate: DelegationCertificate = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: now + 1000, // Future
-        expiresAt: now + 3600000,
-        nonce: "test-nonce-123",
-        chain: "solana",
-        signature: "test-signature-456",
-      };
-
-      const invalidTimingCertificate: DelegationCertificate = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: now + 1000,
-        expiresAt: now, // expiresAt <= issuedAt
-        nonce: "test-nonce-123",
-        chain: "solana",
-        signature: "test-signature-456",
-      };
-
-      expect(validateCertificateStructure(expiredCertificate)).toBe(false);
-      expect(validateCertificateStructure(futureCertificate)).toBe(false);
-      expect(validateCertificateStructure(invalidTimingCertificate)).toBe(false);
-    });
-
-    it("should accept valid certificate with edge case timing", () => {
-      const now = Date.now();
-      
-      const edgeCaseCertificate: DelegationCertificate = {
-        version: "1.0",
-        delegator: "user-pubkey-123",
-        delegatedPubkey: "delegated-pubkey-456",
-        issuedAt: now, // Exactly now
-        expiresAt: now + 1, // 1ms from now
-        nonce: "test-nonce-123",
-        chain: "solana",
-        signature: "test-signature-456",
-      };
-
-      expect(validateCertificateStructure(edgeCaseCertificate)).toBe(true);
     });
   });
 

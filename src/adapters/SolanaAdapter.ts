@@ -25,8 +25,7 @@ import { ProtocolError } from "../errors";
 import {
   serializeCanonical,
   serializeCanonicalRevoke,
-  serializeCertificate,
-  validateCertificateStructure,
+  serializeDelegationProof,
 } from "../utils/canonical";
 
 export type SolanaContext = {
@@ -82,41 +81,32 @@ export class SolanaAdapter extends BaseChainAdapter<
     }
   }
 
-  /** Verify delegation certificate signature */
+  /** Verify delegation proof signature */
   verifyWithDelegation(
     context: ChainDelegationStrategyContext<SolanaContext>
   ): boolean {
     // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
-    if (!context.pubkey || !context.signature || !context.certificate)
+    if (!context.pubkey || !context.signature || !context.delegationProof)
       return false;
 
-    const cert = context.certificate;
+    const proof = context.delegationProof;
 
-    // Use strategy for chain-agnostic certificate validation
-    if (!validateCertificateStructure(cert)) {
+    // Basic validation
+    if (!proof.walletPubkey || !proof.delegatedPubkey || !proof.expiresAt || !proof.signature) {
       return false;
     }
 
-    // Check delegator matches the pubkey
-    if (cert.delegator !== context.pubkey) return false;
+    // Check wallet pubkey matches the context pubkey
+    if (proof.walletPubkey !== context.pubkey) return false;
 
-    // Check chain matches
-    if (cert.chain !== context.chain) return false;
+    // Check if delegation has expired
+    if (proof.expiresAt < Date.now()) return false;
 
     // Perform all operations in a single try-catch to ensure consistent timing
     try {
-      // Serialize certificate for signature verification (using strategy method)
-      const certWithoutSignature = {
-        version: cert.version,
-        delegator: cert.delegator,
-        delegatedPubkey: cert.delegatedPubkey,
-        issuedAt: cert.issuedAt,
-        expiresAt: cert.expiresAt,
-        nonce: cert.nonce,
-        chain: cert.chain,
-      };
-      const message = serializeCertificate(certWithoutSignature);
+      // Serialize delegation proof for signature verification
+      const message = serializeDelegationProof(proof);
 
       const pub = this.normalizePubkey(context.pubkey);
       const sigBytes = bs58.decode(context.signature);

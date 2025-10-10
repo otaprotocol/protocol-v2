@@ -1,12 +1,13 @@
 import type {
   ActionCode,
   CodeGenerationConfig,
-  DelegationCertificate,
+  DelegationProof,
   DelegatedActionCode,
 } from "./types";
 import type {
   ChainAdapter,
   ChainWalletStrategyContext,
+  ChainDelegationStrategyContext,
 } from "./adapters/BaseChainAdapter";
 import { WalletStrategy } from "./strategy/WalletStrategy";
 import { DelegationStrategy } from "./strategy/DelegationStrategy";
@@ -69,14 +70,14 @@ export class ActionCodesProtocol {
   };
   generateCode(
     strategy: "delegation",
-    certificate: DelegationCertificate,
+    delegationProof: DelegationProof,
     delegatedSignature: string
   ): {
     actionCode: DelegatedActionCode;
   };
   generateCode(
     strategy: "wallet" | "delegation",
-    param1: Uint8Array | DelegationCertificate,
+    param1: Uint8Array | DelegationProof,
     signature?: string,
     providedSecret?: string
   ): {
@@ -96,12 +97,12 @@ export class ActionCodesProtocol {
         providedSecret
       );
     } else {
-      // Here param1 must be DelegationCertificate
+      // Here param1 must be DelegationProof
       if (!signature) {
         throw ProtocolError.invalidSignature("Missing delegated signature");
       }
       return this.delegationStrategy.generateDelegatedCode(
-        param1 as DelegationCertificate,
+        param1 as DelegationProof,
         signature
       );
     }
@@ -116,14 +117,17 @@ export class ActionCodesProtocol {
   validateCode(
     strategy: "delegation",
     actionCode: DelegatedActionCode,
-    certificate: DelegationCertificate
+    context?: Omit<
+      ChainDelegationStrategyContext<unknown>,
+      "canonicalMessageParts"
+    >
   ): void;
   validateCode(
     strategy: "wallet" | "delegation",
     actionCode: ActionCode | DelegatedActionCode,
     param2?:
-      | DelegationCertificate
       | Omit<ChainWalletStrategyContext<unknown>, "canonicalMessageParts">
+      | Omit<ChainDelegationStrategyContext<unknown>, "canonicalMessageParts">
   ): void {
     if (strategy === "wallet") {
       // This will throw if validation fails
@@ -150,25 +154,25 @@ export class ActionCodesProtocol {
         throw new Error("Signature verification failed");
       }
     } else {
-      const certificate = param2 as DelegationCertificate;
+      const context = param2 as Omit<
+        ChainDelegationStrategyContext<unknown>,
+        "canonicalMessageParts"
+      >;
 
       // CRITICAL: First validate the delegated action code
-      // This ensures the code was actually generated from this certificate
+      // This ensures the code was actually generated from this delegation proof
       this.delegationStrategy.validateDelegatedCode(
         actionCode as DelegatedActionCode,
-        certificate
+        context.delegationProof
       );
 
-      // Then verify the certificate signature
-      const adapter = this.getAdapter(certificate.chain);
-      if (!adapter) throw ProtocolError.invalidAdapter(certificate.chain);
+      // Then verify the delegation proof signature
+      const adapter = this.getAdapter(context.chain);
+      if (!adapter) throw ProtocolError.invalidAdapter(context.chain);
 
-      const ok = adapter.verifyWithDelegation({
-        chain: certificate.chain,
-        pubkey: certificate.delegator,
-        signature: certificate.signature,
-        certificate: certificate,
-      });
+      const ok = adapter.verifyWithDelegation(
+        context as unknown as ChainDelegationStrategyContext<unknown>
+      );
 
       if (!ok) {
         throw new Error("Signature verification failed");

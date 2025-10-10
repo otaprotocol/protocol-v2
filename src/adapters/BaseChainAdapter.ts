@@ -1,4 +1,4 @@
-import type { CanonicalMessageParts, CanonicalRevokeMessageParts, DelegationCertificate } from "../types";
+import type { CanonicalMessageParts, CanonicalRevokeMessageParts, DelegationProof } from "../types";
 
 // Chain context and adapter interface live here to avoid coupling core types to chain specifics.
 export interface BaseWalletStrategyContext {
@@ -11,7 +11,9 @@ export interface BaseDelegationContext {
   chain: string;
   pubkey: string;
   signature: string;
-  certificate: DelegationCertificate;
+  delegationProof: DelegationProof;
+  delegatedSignature: string;
+  canonicalMessageParts: CanonicalMessageParts;
 }
 
 export interface BaseWalletStrategyRevokeContext {

@@ -1,14 +1,7 @@
 import { WalletStrategy } from "./WalletStrategy";
-import { sha256 } from "../utils/crypto";
-import {
-  serializeCanonical,
-  createDelegationCertificateTemplate,
-  validateCertificateStructure,
-  serializeCertificate,
-  getCanonicalMessageParts,
-} from "../utils/canonical";
+import { getCanonicalMessageParts } from "../utils/canonical";
 import type {
-  DelegationCertificate,
+  DelegationProof,
   DelegatedActionCode,
   CodeGenerationConfig,
   DelegationStrategyCodeGenerationResult,
@@ -24,45 +17,32 @@ export class DelegationStrategy {
   }
 
   /**
-   * Generate a delegated action code using a signed certificate and delegated signature
-   * The certificate acts as the secret for deterministic generation
+   * Generate a delegated action code using a delegation proof and delegated signature
    */
   generateDelegatedCode(
-    certificate: DelegationCertificate,
+    delegationProof: DelegationProof,
     delegatedSignature: string
   ): DelegationStrategyCodeGenerationResult {
-    // Validate certificate format and expiration only
-    // Signature verification happens in ActionCodesProtocol.validateCode()
-    if (!this.validateCertificateStructure(certificate)) {
-      throw new Error("Invalid delegation certificate");
-    }
+    // Validate delegation proof format and expiration
+    this.validateDelegationProof(delegationProof);
 
-    // Use certificate as the secret for deterministic generation
-    const certificateSecret = this.hashCertificate(certificate);
-
-    // Generate canonical message for delegation
-    const windowStart =
-      Math.floor(Date.now() / this.config.ttlMs) * this.config.ttlMs;
-    const canonicalMessage = serializeCanonical({
-      pubkey: certificate.delegator,
-      windowStart,
-      secret: certificateSecret,
-    });
+    // Generate canonical message using the delegated pubkey
+    const canonicalMessage = getCanonicalMessageParts(
+      delegationProof.delegatedPubkey,
+      this.config.ttlMs
+    );
 
     // Generate code using existing WalletStrategy with canonical message
     const result = this.walletStrategy.generateCode(
       canonicalMessage,
-      delegatedSignature, // Use delegated signature
-      certificateSecret // Use certificate hash as secret
+      delegatedSignature // Use delegated signature
     );
 
     // Create delegated action code
     const delegatedActionCode: DelegatedActionCode = {
       ...result.actionCode,
-      delegationId: this.hashCertificate(certificate),
-      delegatedBy: certificate.delegator,
+      delegationProof: delegationProof,
       delegatedSignature: delegatedSignature,
-      delegatedPubkey: certificate.delegatedPubkey,
     };
 
     return {
@@ -75,30 +55,41 @@ export class DelegationStrategy {
    */
   validateDelegatedCode(
     actionCode: DelegatedActionCode,
-    certificate: DelegationCertificate
+    delegationProof: DelegationProof
   ): void {
     // Validate the action code itself
     this.walletStrategy.validateCode(actionCode);
 
-    // Verify delegation is still valid
-    if (!this.validateCertificateStructure(certificate)) {
-      throw new Error("Delegation certificate expired or invalid");
-    }
+    // Verify delegation proof is still valid
+    this.validateDelegationProof(delegationProof);
 
-    // Verify the certificate matches the action code
-    if (actionCode.delegationId !== this.hashCertificate(certificate)) {
-      throw new Error("Action code does not match delegation certificate");
-    }
-
-    // Verify the delegator matches
-    if (actionCode.delegatedBy !== certificate.delegator) {
-      throw new Error("Action code delegator does not match certificate");
-    }
-
-    // Verify the delegated pubkey matches
-    if (actionCode.delegatedPubkey !== certificate.delegatedPubkey) {
+    // Verify the delegation proof matches the action code
+    if (
+      actionCode.delegationProof.walletPubkey !== delegationProof.walletPubkey
+    ) {
       throw new Error(
-        "Action code delegated pubkey does not match certificate"
+        "Action code wallet pubkey does not match delegation proof"
+      );
+    }
+
+    if (
+      actionCode.delegationProof.delegatedPubkey !==
+      delegationProof.delegatedPubkey
+    ) {
+      throw new Error(
+        "Action code delegated pubkey does not match delegation proof"
+      );
+    }
+
+    if (actionCode.delegationProof.expiresAt !== delegationProof.expiresAt) {
+      throw new Error(
+        "Action code delegation expiration does not match delegation proof"
+      );
+    }
+
+    if (actionCode.delegationProof.signature !== delegationProof.signature) {
+      throw new Error(
+        "Action code delegation signature does not match delegation proof"
       );
     }
 
@@ -109,53 +100,41 @@ export class DelegationStrategy {
   }
 
   /**
+   * Validate a delegation proof
+   */
+  private validateDelegationProof(delegationProof: DelegationProof): void {
+    if (!delegationProof.walletPubkey) {
+      throw new Error("Wallet pubkey is required");
+    }
+
+    if (!delegationProof.delegatedPubkey) {
+      throw new Error("Delegated pubkey is required");
+    }
+
+    if (!delegationProof.expiresAt) {
+      throw new Error("Expiration time is required");
+    }
+
+    if (!delegationProof.signature) {
+      throw new Error("Delegation signature is required");
+    }
+
+    // Check if delegation has expired
+    if (delegationProof.expiresAt < Date.now()) {
+      throw new Error("Delegation proof has expired");
+    }
+  }
+
+  /**
    * Get the wallet strategy instance for advanced usage
    */
   getWalletStrategy(): WalletStrategy {
     return this.walletStrategy;
   }
 
-  // Instance methods for accessing canonical functions
-  createDelegationCertificateTemplate(
-    userPublicKey: string,
-    delegatedPubkey: string,
-    durationMs: number = 3600000,
-    chain: string = "solana"
-  ): Omit<DelegationCertificate, "signature"> {
-    return createDelegationCertificateTemplate(
-      userPublicKey,
-      delegatedPubkey,
-      durationMs,
-      chain
-    );
-  }
-
-  hashCertificate(certificate: DelegationCertificate): string {
-    // Include signature in hash to prevent relayer code generation
-    const serialized = this.serializeCertificate(certificate);
-    const signatureBytes = new TextEncoder().encode(certificate.signature);
-
-    // Combine certificate data with signature
-    const combined = new Uint8Array(serialized.length + signatureBytes.length);
-    combined.set(serialized, 0);
-    combined.set(signatureBytes, serialized.length);
-
-    const hash = sha256(combined);
-    return Array.from(hash) 
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  serializeCertificate(
-    certificate: Omit<DelegationCertificate, "signature">
-  ): Uint8Array {
-    return serializeCertificate(certificate);
-  }
-
-  validateCertificateStructure(certificate: DelegationCertificate): boolean {
-    return validateCertificateStructure(certificate);
-  }
-
+  /**
+   * Get canonical message parts for delegation
+   */
   getCanonicalMessageParts(
     pubkey: string,
     providedSecret?: string

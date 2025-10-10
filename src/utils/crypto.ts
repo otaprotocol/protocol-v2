@@ -104,11 +104,3 @@ export function generateRandomSecret(): string {
   crypto.getRandomValues(randomBytes);
   return btoa(String.fromCharCode(...randomBytes));
 }
-
-// Generate a nonce for delegation certificates
-export function generateNonce(): string {
-  const randomBytes = new Uint8Array(32);
-  crypto.getRandomValues(randomBytes);
-  return btoa(String.fromCharCode(...randomBytes));
-}
-
