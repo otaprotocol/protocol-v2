@@ -82,7 +82,6 @@ describe("Cross-Chain Compatibility", () => {
       const isValid = solanaAdapter.verifyWithWallet({
         canonicalMessageParts,
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: signatureB58,
       });
 
@@ -296,7 +295,6 @@ describe("Cross-Chain Compatibility", () => {
       const isValid = solanaAdapter.verifyWithWallet({
         canonicalMessageParts,
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: signatureB58,
       });
 
@@ -355,7 +353,6 @@ describe("Cross-Chain Compatibility", () => {
         solanaAdapter.verifyWithWallet({
           canonicalMessageParts,
           chain: "solana",
-          pubkey: solanaKeypair.publicKey,
           signature: solanaSignature,
         })
       ).toBe(true);
@@ -364,7 +361,6 @@ describe("Cross-Chain Compatibility", () => {
         solanaAdapter.verifyWithWallet({
           canonicalMessageParts,
           chain: "solana",
-          pubkey: solanaKeypair.publicKey,
           signature: rsaSignature, // Wrong signature type
         })
       ).toBe(false);

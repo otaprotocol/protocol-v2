@@ -1,11 +1,13 @@
 import {
   BaseChainAdapter,
   ChainDelegationStrategyContext,
+  ChainWalletStrategyRevokeContext,
   type ChainWalletStrategyContext,
 } from "../../src/adapters/BaseChainAdapter";
 
 // Test implementation of BaseChainAdapter
 class TestChainAdapter extends BaseChainAdapter<
+  { testData: string },
   { testData: string },
   { testData: string }
 > {
@@ -21,13 +23,19 @@ class TestChainAdapter extends BaseChainAdapter<
     // Simple test implementation
     return context.testData === "valid";
   }
+  verifyRevokeWithWallet(
+    context: ChainWalletStrategyRevokeContext<{ testData: string }>
+  ): boolean {
+    // Simple test implementation
+    return context.testData === "valid";
+  }
 }
 
 describe("BaseChainAdapter", () => {
   let adapter: TestChainAdapter;
 
   beforeEach(() => {
-    adapter = new TestChainAdapter();
+    adapter = new TestChainAdapter() as TestChainAdapter;
   });
 
   describe("ChainContext type", () => {

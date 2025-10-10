@@ -616,7 +616,6 @@ describe("ActionCodesProtocol", () => {
       // 4. User provides the signature for verification (this is the input from user)
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: testKeypair.publicKey,
         signature: userRevokeSignature, // This is the signature the user provides
         canonicalRevokeMessageParts,
       };
@@ -650,7 +649,6 @@ describe("ActionCodesProtocol", () => {
       // 4. Create context for revoke verification with wrong signature
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: testKeypair.publicKey, // Original pubkey
         signature: wrongSignature, // But signed by different keypair
         canonicalRevokeMessageParts,
       };
@@ -697,7 +695,6 @@ describe("ActionCodesProtocol", () => {
         // 4. Verify revoke signature
         const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
           chain: "solana",
-          pubkey: testKeypair.publicKey,
           signature: revokeSignature,
           canonicalRevokeMessageParts,
         };
@@ -723,7 +720,6 @@ describe("ActionCodesProtocol", () => {
       const solanaAdapter = protocol.getAdapter("solana") as SolanaAdapter;
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: testKeypair.publicKey,
         signature: userRevokeSignature, // User provided this signature
         canonicalRevokeMessageParts,
       };

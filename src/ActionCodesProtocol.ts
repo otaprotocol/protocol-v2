@@ -54,6 +54,7 @@ export class ActionCodesProtocol {
     return this._walletStrategy;
   }
 
+  // @deprecated remove this method, instead use serializeCanonical directly
   /** Get canonical message parts for signing (before code generation) */
   getCanonicalMessageParts(pubkey: string, providedSecret?: string): Uint8Array {
     const windowStart = Math.floor(Date.now() / this.config.ttlMs) * this.config.ttlMs;

@@ -45,7 +45,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: signatureB58,
         canonicalMessageParts,
       };
@@ -66,7 +65,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey, // Different pubkey than the one used to sign
         signature: signatureB58,
         canonicalMessageParts,
       };
@@ -87,7 +85,6 @@ describe("SolanaAdapter", () => {
       // Test with PublicKey object
       const context1: ChainWalletStrategyContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey, // PublicKey object
         signature: signatureB58,
         canonicalMessageParts,
       };
@@ -96,7 +93,6 @@ describe("SolanaAdapter", () => {
       // Test with base58 string
       const context2: ChainWalletStrategyContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey.toString(), // base58 string
         signature: signatureB58,
         canonicalMessageParts,
       };
@@ -117,7 +113,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: signatureB58,
         canonicalRevokeMessageParts,
       };
@@ -139,7 +134,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey, // Different pubkey than the one used to sign
         signature: signatureB58,
         canonicalRevokeMessageParts,
       };
@@ -161,7 +155,6 @@ describe("SolanaAdapter", () => {
       // Test with PublicKey object
       const context1: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey, // PublicKey object
         signature: signatureB58,
         canonicalRevokeMessageParts,
       };
@@ -170,7 +163,6 @@ describe("SolanaAdapter", () => {
       // Test with base58 string
       const context2: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey.toString(), // base58 string
         signature: signatureB58,
         canonicalRevokeMessageParts,
       };
@@ -189,7 +181,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "ethereum", // Wrong chain
-        pubkey: keypair.publicKey,
         signature: signatureB58,
         canonicalRevokeMessageParts,
       };
@@ -208,7 +199,6 @@ describe("SolanaAdapter", () => {
       // Missing signature
       const context1: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: "", // Empty signature
         canonicalRevokeMessageParts,
       };
@@ -217,7 +207,6 @@ describe("SolanaAdapter", () => {
       // Missing pubkey
       const context2: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: "", // Empty pubkey
         signature: "some-signature",
         canonicalRevokeMessageParts,
       };
@@ -226,7 +215,6 @@ describe("SolanaAdapter", () => {
       // Missing canonicalRevokeMessageParts
       const context3: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: "some-signature",
         canonicalRevokeMessageParts: null as any, // Missing parts
       };
@@ -242,7 +230,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: "invalid-base58-signature", // Invalid base58
         canonicalRevokeMessageParts,
       };
@@ -272,7 +259,6 @@ describe("SolanaAdapter", () => {
 
         const context: ChainWalletStrategyRevokeContext<SolanaContext> = {
           chain: "solana",
-          pubkey: keypair.publicKey,
           signature: signatureB58,
           canonicalRevokeMessageParts,
         };
@@ -756,7 +742,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: signatureB58,
         canonicalMessageParts,
       };
@@ -780,7 +765,6 @@ describe("SolanaAdapter", () => {
 
       const context: ChainWalletStrategyContext<SolanaContext> = {
         chain: "solana",
-        pubkey: keypair.publicKey,
         signature: signatureB58,
         canonicalMessageParts,
       };

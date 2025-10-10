@@ -29,7 +29,6 @@ import {
 import { DelegationStrategy } from "../strategy/DelegationStrategy";
 
 export type SolanaContext = {
-  pubkey: string | PublicKey;
   signature: string; // base58
 };
 
@@ -55,13 +54,13 @@ export class SolanaAdapter extends BaseChainAdapter<
   ): boolean {
     // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
-    if (!context.pubkey || !context.signature || !context.canonicalMessageParts)
+    if (!context.canonicalMessageParts.pubkey || !context.signature || !context.canonicalMessageParts)
       return false;
 
     // Perform all operations in a single try-catch to ensure consistent timing
     try {
       const message = serializeCanonical(context.canonicalMessageParts);
-      const pub = this.normalizePubkey(context.pubkey);
+      const pub = this.normalizePubkey(context.canonicalMessageParts.pubkey);
       const sigBytes = bs58.decode(context.signature);
       const pubBytes = pub.toBytes();
 
@@ -138,9 +137,9 @@ export class SolanaAdapter extends BaseChainAdapter<
     // Early validation checks - these are fast and don't leak timing info
     if (context.chain !== "solana") return false;
     if (
-      !context.pubkey ||
-      !context.signature ||
-      !context.canonicalRevokeMessageParts
+      !context.canonicalRevokeMessageParts ||
+      !context.canonicalRevokeMessageParts.pubkey ||
+      !context.signature
     )
       return false;
 
@@ -149,7 +148,7 @@ export class SolanaAdapter extends BaseChainAdapter<
       const message = serializeCanonicalRevoke(
         context.canonicalRevokeMessageParts
       );
-      const pub = this.normalizePubkey(context.pubkey);
+      const pub = this.normalizePubkey(context.canonicalRevokeMessageParts.pubkey);
       const sigBytes = bs58.decode(context.signature);
       const pubBytes = pub.toBytes();
 
