@@ -70,7 +70,7 @@ export class ActionCodesProtocol {
   generateCode(
     strategy: "delegation",
     delegationProof: DelegationProof,
-    delegatedSignature: string
+    signature: string
   ): {
     actionCode: DelegatedActionCode;
   };

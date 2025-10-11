@@ -9,16 +9,14 @@ import { Transaction, Keypair } from "@solana/web3.js";
 import { MEMO_PROGRAM_ID } from "@solana/spl-memo";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
-import type {
-  ChainAdapter,
-} from "../src/adapters/BaseChainAdapter";
+import type { ChainAdapter } from "../src/adapters/BaseChainAdapter";
 import type { ProtocolMetaFields } from "../src/utils/protocolMeta";
 import { codeHash } from "../src/utils/crypto";
 import { DelegationProof, ActionCode } from "../src/types";
 import {
   serializeCanonicalRevoke,
   getCanonicalMessageParts,
-    serializeDelegationProof,
+  serializeDelegationProof,
 } from "../src/utils/canonical";
 
 // Helper function to create a real signature for testing
@@ -257,18 +255,32 @@ describe("ActionCodesProtocol", () => {
     test("generates and validates delegated codes", async () => {
       // Create a delegation proof
       const delegatedKeypair = Keypair.generate();
+      
+      // Create a proper 64-byte signature for the delegation proof
+      const delegationMessage = new TextEncoder().encode(
+        JSON.stringify({
+          walletPubkey: testKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          chain: "solana",
+        })
+      );
+      const delegationSignature = nacl.sign.detached(delegationMessage, testKeypair.secretKey);
+      const delegationSignatureB58 = bs58.encode(delegationSignature);
+      
       const delegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
         delegatedPubkey: delegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour from now
         chain: "solana",
-        signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
+        signature: delegationSignatureB58, // Real signature
       };
 
       // Create a real signature for the delegated keypair
-      const canonicalMessage = protocol.delegationStrategy.getCanonicalMessageParts(
-        delegatedKeypair.publicKey.toString()
-      );
+      const canonicalMessage =
+        protocol.delegationStrategy.getCanonicalMessageParts(
+          delegatedKeypair.publicKey.toString()
+        );
       const delegatedSignature = nacl.sign.detached(
         canonicalMessage,
         delegatedKeypair.secretKey
@@ -302,12 +314,25 @@ describe("ActionCodesProtocol", () => {
     test("validates delegated codes with protocol validation", async () => {
       // Create a delegation proof
       const delegatedKeypair = Keypair.generate();
+      
+      // Create a proper 64-byte signature for the delegation proof
+      const delegationMessage = new TextEncoder().encode(
+        JSON.stringify({
+          walletPubkey: testKeypair.publicKey.toString(),
+          delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          expiresAt: Date.now() + 3600000,
+          chain: "solana",
+        })
+      );
+      const delegationSignature = nacl.sign.detached(delegationMessage, testKeypair.secretKey);
+      const delegationSignatureB58 = bs58.encode(delegationSignature);
+      
       const delegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
         delegatedPubkey: delegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour from now
         chain: "solana",
-        signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
+        signature: delegationSignatureB58, // Real signature
       };
 
       // Generate delegated code
@@ -442,9 +467,10 @@ describe("ActionCodesProtocol", () => {
           pubkey: originalDelegationProof.walletPubkey,
           signature: originalDelegationProof.signature,
           delegationProof: originalDelegationProof,
-          delegatedSignature: mockDelegatedSignature,
         });
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should reject codes with stolen signatures and different delegator during validation", async () => {
@@ -489,9 +515,10 @@ describe("ActionCodesProtocol", () => {
           pubkey: originalProof.walletPubkey,
           signature: originalProof.signature,
           delegationProof: originalProof,
-          delegatedSignature: mockDelegatedSignature,
         });
-        }).toThrow("Invalid walletPubkey: Action code wallet pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid walletPubkey: Action code wallet pubkey does not match delegation proof"
+      );
     });
 
     it("should require signature for wallet strategy to prevent public key + timestamp attacks", async () => {

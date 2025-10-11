@@ -1,5 +1,8 @@
 import { WalletStrategy } from "./WalletStrategy";
-import { getCanonicalMessageParts, serializeCanonical } from "../utils/canonical";
+import {
+  getCanonicalMessageParts,
+  serializeCanonical,
+} from "../utils/canonical";
 import { ProtocolError } from "../errors";
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
@@ -22,11 +25,11 @@ export class DelegationStrategy {
   }
 
   /**
-   * Generate a delegated action code using a delegation proof and delegated signature
+   * Generate a delegated action code using a delegation proof and signature over message to generate code via delegated keypair
    */
   generateDelegatedCode(
     delegationProof: DelegationProof,
-    delegatedSignature: string
+    signature: string // this is the signature over message to generate code via delegated keypair
   ): DelegationStrategyCodeGenerationResult {
     // Validate delegation proof format and expiration
     this.validateDelegationProof(delegationProof);
@@ -40,7 +43,7 @@ export class DelegationStrategy {
     // Generate code using existing WalletStrategy with canonical message
     const result = this.walletStrategy.generateCode(
       canonicalMessage,
-      delegatedSignature // Use delegated signature
+      signature // Use signature
     );
 
     // Create delegated action code
@@ -48,7 +51,6 @@ export class DelegationStrategy {
       ...result.actionCode,
       pubkey: delegationProof.walletPubkey, // Code belongs to the user who delegated
       delegationProof: delegationProof,
-      delegatedSignature: delegatedSignature,
     };
 
     return {
@@ -78,7 +80,7 @@ export class DelegationStrategy {
 
     // Verify the delegation proof matches the action code
     if (
-      actionCode.delegationProof.walletPubkey !== delegationProof.walletPubkey
+      actionCode.pubkey !== delegationProof.walletPubkey || actionCode.pubkey !== actionCode.delegationProof.walletPubkey
     ) {
       throw ProtocolError.invalidInput(
         "walletPubkey",
@@ -106,6 +108,11 @@ export class DelegationStrategy {
       );
     }
 
+    // Verify delegated signature is present
+    if (!actionCode.delegationProof.signature) {
+      throw ProtocolError.missingRequiredField("delegationProof.signature");
+    }
+
     if (actionCode.delegationProof.signature !== delegationProof.signature) {
       throw ProtocolError.invalidInput(
         "signature",
@@ -114,24 +121,21 @@ export class DelegationStrategy {
       );
     }
 
-    // Verify delegated signature is present
-    if (!actionCode.delegatedSignature) {
-      throw ProtocolError.missingRequiredField("delegatedSignature");
-    }
-
     // Finally, verify the delegated signature against the canonical message
     // Use the original timestamp from the action code, not the current time
     const canonicalMessage = serializeCanonical({
       pubkey: delegationProof.delegatedPubkey,
       windowStart: actionCode.timestamp,
     });
-    
+
     // Decode and verify the delegated signature
     let signatureBytes: Uint8Array;
     try {
-      signatureBytes = bs58.decode(actionCode.delegatedSignature);
+      signatureBytes = bs58.decode(actionCode.signature ?? "");
     } catch {
-      throw ProtocolError.invalidSignature("Invalid Base58 delegated signature format");
+      throw ProtocolError.invalidSignature(
+        "Invalid Base58 delegated signature format"
+      );
     }
 
     // Verify the signature using the delegated keypair's public key
@@ -143,7 +147,9 @@ export class DelegationStrategy {
     );
 
     if (!isValidSignature) {
-      throw ProtocolError.invalidSignature("Delegated signature verification failed");
+      throw ProtocolError.invalidSignature(
+        "Delegated signature verification failed"
+      );
     }
   }
 
@@ -152,63 +158,133 @@ export class DelegationStrategy {
    */
   private validateDelegationProof(delegationProof: DelegationProof): void {
     // Validate walletPubkey using Solana's PublicKey constructor
-    if (!delegationProof.walletPubkey || typeof delegationProof.walletPubkey !== 'string') {
-      throw ProtocolError.invalidInput("walletPubkey", delegationProof.walletPubkey, "Wallet pubkey is required and must be a string");
+    if (
+      !delegationProof.walletPubkey ||
+      typeof delegationProof.walletPubkey !== "string"
+    ) {
+      throw ProtocolError.invalidInput(
+        "walletPubkey",
+        delegationProof.walletPubkey,
+        "Wallet pubkey is required and must be a string"
+      );
     }
     try {
       new PublicKey(delegationProof.walletPubkey);
     } catch {
-      throw ProtocolError.invalidInput("walletPubkey", delegationProof.walletPubkey, "Invalid wallet pubkey format");
+      throw ProtocolError.invalidInput(
+        "walletPubkey",
+        delegationProof.walletPubkey,
+        "Invalid wallet pubkey format"
+      );
     }
 
     // Validate delegatedPubkey using Solana's PublicKey constructor
-    if (!delegationProof.delegatedPubkey || typeof delegationProof.delegatedPubkey !== 'string') {
-      throw ProtocolError.invalidInput("delegatedPubkey", delegationProof.delegatedPubkey, "Delegated pubkey is required and must be a string");
+    if (
+      !delegationProof.delegatedPubkey ||
+      typeof delegationProof.delegatedPubkey !== "string"
+    ) {
+      throw ProtocolError.invalidInput(
+        "delegatedPubkey",
+        delegationProof.delegatedPubkey,
+        "Delegated pubkey is required and must be a string"
+      );
     }
     try {
       new PublicKey(delegationProof.delegatedPubkey);
     } catch {
-      throw ProtocolError.invalidInput("delegatedPubkey", delegationProof.delegatedPubkey, "Invalid delegated pubkey format");
+      throw ProtocolError.invalidInput(
+        "delegatedPubkey",
+        delegationProof.delegatedPubkey,
+        "Invalid delegated pubkey format"
+      );
     }
 
     // Validate chain
-    if (!delegationProof.chain || typeof delegationProof.chain !== 'string') {
-      throw ProtocolError.invalidInput("chain", delegationProof.chain, "Chain is required and must be a string");
+    if (!delegationProof.chain || typeof delegationProof.chain !== "string") {
+      throw ProtocolError.invalidInput(
+        "chain",
+        delegationProof.chain,
+        "Chain is required and must be a string"
+      );
     }
-    if (delegationProof.chain.length === 0 || delegationProof.chain.length > 50) {
-      throw ProtocolError.invalidInput("chain", delegationProof.chain, "Chain must be between 1 and 50 characters");
+    if (
+      delegationProof.chain.length === 0 ||
+      delegationProof.chain.length > 50
+    ) {
+      throw ProtocolError.invalidInput(
+        "chain",
+        delegationProof.chain,
+        "Chain must be between 1 and 50 characters"
+      );
     }
     if (!/^[a-z0-9-]+$/.test(delegationProof.chain)) {
-      throw ProtocolError.invalidInput("chain", delegationProof.chain, "Chain contains invalid characters (only lowercase letters, numbers, and hyphens allowed)");
+      throw ProtocolError.invalidInput(
+        "chain",
+        delegationProof.chain,
+        "Chain contains invalid characters (only lowercase letters, numbers, and hyphens allowed)"
+      );
     }
 
     // Validate expiresAt
-    if (typeof delegationProof.expiresAt !== 'number' || !Number.isInteger(delegationProof.expiresAt)) {
-      throw ProtocolError.invalidInput("expiresAt", delegationProof.expiresAt, "Expiration time must be a valid integer timestamp");
+    if (
+      typeof delegationProof.expiresAt !== "number" ||
+      !Number.isInteger(delegationProof.expiresAt)
+    ) {
+      throw ProtocolError.invalidInput(
+        "expiresAt",
+        delegationProof.expiresAt,
+        "Expiration time must be a valid integer timestamp"
+      );
     }
     if (delegationProof.expiresAt <= 0) {
-      throw ProtocolError.invalidInput("expiresAt", delegationProof.expiresAt, "Expiration time must be positive");
+      throw ProtocolError.invalidInput(
+        "expiresAt",
+        delegationProof.expiresAt,
+        "Expiration time must be positive"
+      );
     }
-    
+
     // Check for reasonable expiration bounds (not too far in the future)
     const now = Date.now();
     const maxFuture = 365 * 24 * 60 * 60 * 1000; // 1 year from now
-    
+
     if (delegationProof.expiresAt > now + maxFuture) {
-      throw ProtocolError.invalidInput("expiresAt", delegationProof.expiresAt, "Expiration time is too far in the future");
+      throw ProtocolError.invalidInput(
+        "expiresAt",
+        delegationProof.expiresAt,
+        "Expiration time is too far in the future"
+      );
     }
 
     // Check if delegation has expired
     if (delegationProof.expiresAt < now) {
-      throw ProtocolError.expiredCode("Delegation proof has expired", delegationProof.expiresAt, now);
+      throw ProtocolError.expiredCode(
+        "Delegation proof has expired",
+        delegationProof.expiresAt,
+        now
+      );
     }
 
     // Validate signature
-    if (!delegationProof.signature || typeof delegationProof.signature !== 'string') {
-      throw ProtocolError.invalidInput("signature", delegationProof.signature, "Delegation signature is required and must be a string");
+    if (
+      !delegationProof.signature ||
+      typeof delegationProof.signature !== "string"
+    ) {
+      throw ProtocolError.invalidInput(
+        "signature",
+        delegationProof.signature,
+        "Delegation signature is required and must be a string"
+      );
     }
-    if (delegationProof.signature.length === 0 || delegationProof.signature.length > 200) {
-      throw ProtocolError.invalidInput("signature", delegationProof.signature, "Delegation signature must be between 1 and 200 characters");
+    if (
+      delegationProof.signature.length === 0 ||
+      delegationProof.signature.length > 200
+    ) {
+      throw ProtocolError.invalidInput(
+        "signature",
+        delegationProof.signature,
+        "Delegation signature must be between 1 and 200 characters"
+      );
     }
     // Note: Signature format validation will be done during actual verification
   }

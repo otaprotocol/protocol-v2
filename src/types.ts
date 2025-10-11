@@ -42,6 +42,5 @@ export interface DelegationProof {
 
 export interface DelegatedActionCode extends ActionCode {
   delegationProof: DelegationProof; // The delegation proof
-  delegatedSignature: string;       // Signature from delegated keypair
 }
 

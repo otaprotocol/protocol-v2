@@ -75,7 +75,7 @@ describe("DelegationStrategy", () => {
       delegatedPubkey: delegatedKeypair.publicKey.toString(),
       expiresAt: Date.now() + 3600000, // 1 hour from now
       chain: "solana",
-      signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
+      signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", // Valid Base58 signature
     };
   });
 
@@ -139,7 +139,7 @@ describe("DelegationStrategy", () => {
       expect(result.actionCode.delegationProof).toBeDefined();
       expect(result.actionCode.delegationProof.walletPubkey).toBe(mockWallet.publicKey);
       expect(result.actionCode.delegationProof.delegatedPubkey).toBe(delegatedKeypair.publicKey.toString());
-      expect(result.actionCode.delegatedSignature).toBe(realDelegatedSignature);
+      expect(result.actionCode.delegationProof.signature).toBe(delegationProof.signature);
     });
 
     it("should generate deterministic codes for the same delegation proof", () => {
@@ -402,10 +402,10 @@ describe("DelegationStrategy", () => {
       const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
       const actionCode = result.actionCode as DelegatedActionCode;
 
-      // Tamper with the delegated signature to make validation fail
+      // Tamper with the action code signature to make validation fail
       const tamperedActionCode: DelegatedActionCode = {
         ...actionCode,
-        delegatedSignature: "tampered-signature", // Invalid signature
+        signature: "tampered-signature", // Invalid signature
       };
 
       expect(() => {
