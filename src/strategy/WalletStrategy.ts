@@ -103,6 +103,6 @@ export class WalletStrategy {
 
   // Instance method for accessing canonical functions
   getCanonicalMessageParts(pubkey: string): Uint8Array {
-    return getCanonicalMessageParts(pubkey, this.config.ttlMs);
+    return getCanonicalMessageParts(pubkey);
   }
 }

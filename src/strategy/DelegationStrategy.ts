@@ -35,11 +35,8 @@ export class DelegationStrategy {
     this.validateDelegationProof(delegationProof);
 
     // Generate canonical message using the delegated pubkey (the signer)
-    const canonicalMessage = getCanonicalMessageParts(
-      delegationProof.delegatedPubkey,
-      this.config.ttlMs
-    );
-
+    const canonicalMessage = getCanonicalMessageParts(delegationProof.delegatedPubkey);
+    
     // Generate code using existing WalletStrategy with canonical message
     const result = this.walletStrategy.generateCode(
       canonicalMessage,
@@ -80,7 +77,8 @@ export class DelegationStrategy {
 
     // Verify the delegation proof matches the action code
     if (
-      actionCode.pubkey !== delegationProof.walletPubkey || actionCode.pubkey !== actionCode.delegationProof.walletPubkey
+      actionCode.pubkey !== delegationProof.walletPubkey ||
+      actionCode.pubkey !== actionCode.delegationProof.walletPubkey
     ) {
       throw ProtocolError.invalidInput(
         "walletPubkey",
@@ -293,6 +291,6 @@ export class DelegationStrategy {
    * Get canonical message parts for delegation
    */
   getCanonicalMessageParts(pubkey: string): Uint8Array {
-    return getCanonicalMessageParts(pubkey, this.config.ttlMs);
+    return getCanonicalMessageParts(pubkey);
   }
 }

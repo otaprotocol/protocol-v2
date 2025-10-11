@@ -31,15 +31,13 @@ export function serializeCanonicalRevoke(
   return new TextEncoder().encode(json);
 }
 
-export function getCanonicalMessageParts(
-  pubkey: string,
-  ttlMs: number
-): Uint8Array {
-  const windowStart = Math.floor(Date.now() / ttlMs) * ttlMs;
-  return serializeCanonical({ pubkey, windowStart });
+export function getCanonicalMessageParts(pubkey: string): Uint8Array {
+  return serializeCanonical({ pubkey, windowStart: Date.now() });
 }
 
-export function serializeDelegationProof(proof: Omit<DelegationProof, 'signature'>): Uint8Array {
+export function serializeDelegationProof(
+  proof: Omit<DelegationProof, "signature">
+): Uint8Array {
   const json = JSON.stringify({
     walletPubkey: proof.walletPubkey,
     delegatedPubkey: proof.delegatedPubkey,

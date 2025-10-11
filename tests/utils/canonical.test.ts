@@ -268,7 +268,7 @@ describe("canonical utils", () => {
       const pubkey = "test-pubkey-123";
       const ttlMs = 120000; // 2 minutes
 
-      const result = getCanonicalMessageParts(pubkey, ttlMs);
+      const result = getCanonicalMessageParts(pubkey);
       const decoded = JSON.parse(new TextDecoder().decode(result));
 
       expect(decoded).toEqual({
@@ -278,23 +278,21 @@ describe("canonical utils", () => {
         windowStart: expect.any(Number),
       });
 
-      // Check that windowStart is aligned to TTL
+      // Check that windowStart is current timestamp (no longer aligned to TTL)
       const windowStart = decoded.windowStart;
-      expect(windowStart % ttlMs).toBe(0);
+      const now = Date.now();
+      expect(Math.abs(windowStart - now)).toBeLessThan(1000); // Within 1 second
     });
 
-    it("should align windowStart to TTL boundary", () => {
+    it("should use current timestamp for windowStart", () => {
       const pubkey = "test-pubkey-123";
-      const ttlMs = 300000; // 5 minutes
 
-      const result = getCanonicalMessageParts(pubkey, ttlMs);
+      const result = getCanonicalMessageParts(pubkey);
       const decoded = JSON.parse(new TextDecoder().decode(result));
 
       const windowStart = decoded.windowStart;
       const now = Date.now();
-      const expectedWindowStart = Math.floor(now / ttlMs) * ttlMs;
-
-      expect(windowStart).toBe(expectedWindowStart);
+      expect(Math.abs(windowStart - now)).toBeLessThan(1000); // Within 1 second
     });
 
     it("should produce deterministic output for same inputs", () => {
@@ -307,8 +305,8 @@ describe("canonical utils", () => {
       Date.now = () => mockTime;
 
       try {
-        const result1 = getCanonicalMessageParts(pubkey, ttlMs);
-        const result2 = getCanonicalMessageParts(pubkey, ttlMs);
+        const result1 = getCanonicalMessageParts(pubkey);
+        const result2 = getCanonicalMessageParts(pubkey);
 
         expect(result1).toEqual(result2);
       } finally {
@@ -325,8 +323,8 @@ describe("canonical utils", () => {
       Date.now = () => mockTime;
 
       try {
-        const result1 = getCanonicalMessageParts(pubkey, 120000); // 2 minutes
-        const result2 = getCanonicalMessageParts(pubkey, 300000); // 5 minutes
+        const result1 = getCanonicalMessageParts(pubkey); // 2 minutes
+        const result2 = getCanonicalMessageParts(pubkey); // 5 minutes
 
         // Different TTLs should align to different windows at this specific time
         const window1 = Math.floor(mockTime / 120000) * 120000;
@@ -352,7 +350,7 @@ describe("canonical utils", () => {
       ];
 
       for (const pubkey of pubkeys) {
-        const result = getCanonicalMessageParts(pubkey, 120000);
+        const result = getCanonicalMessageParts(pubkey);
         const decoded = JSON.parse(new TextDecoder().decode(result));
         expect(decoded.pubkey).toBe(pubkey);
       }

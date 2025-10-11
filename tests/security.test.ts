@@ -17,7 +17,7 @@ describe("Security Review", () => {
 
   describe("no sensitive data in logs", () => {
     test("ActionCode objects only contain public data", async () => {
-      const canonicalMessage = getCanonicalMessageParts("test-pubkey", protocol.getConfig().ttlMs);
+      const canonicalMessage = getCanonicalMessageParts("test-pubkey");
       const signature = "testsignature";
       const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
@@ -39,7 +39,7 @@ describe("Security Review", () => {
     });
 
     test("canonical messages are safe to serialize", async () => {
-      const canonicalMessage = getCanonicalMessageParts("test-pubkey", protocol.getConfig().ttlMs);
+      const canonicalMessage = getCanonicalMessageParts("test-pubkey");
       const signature = "testsignature";
       const { canonicalMessage: generatedMessage } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
@@ -213,7 +213,7 @@ describe("Security Review", () => {
 
   describe("memory safety", () => {
     test("does not retain sensitive data in memory", async () => {
-      const canonicalMessage = getCanonicalMessageParts("test-pubkey", protocol.getConfig().ttlMs);
+      const canonicalMessage = getCanonicalMessageParts("test-pubkey");
       const signature = "testsignature";
       const { actionCode } = await protocol.generateCode("wallet", canonicalMessage, signature);
       
