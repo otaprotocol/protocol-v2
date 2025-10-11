@@ -158,7 +158,7 @@ export class ActionCodesProtocol {
       const ok = adapter.verifyWithDelegation({
         ...(context as Record<string, unknown>),
         message: {
-          pubkey: (actionCode as ActionCode).pubkey,
+          pubkey: context.delegationProof.delegatedPubkey,
           windowStart: (actionCode as ActionCode).timestamp,
         },
       } as unknown as DelegatedContext<unknown>);
