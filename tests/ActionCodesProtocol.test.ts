@@ -7,12 +7,12 @@ import {
 import { SolanaAdapter, SolanaContext } from "../src/adapters/SolanaAdapter";
 import { Transaction, Keypair } from "@solana/web3.js";
 import { MEMO_PROGRAM_ID } from "@solana/spl-memo";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
 import type {
   ChainAdapter,
 } from "../src/adapters/BaseChainAdapter";
 import type { ProtocolMetaFields } from "../src/utils/protocolMeta";
-import bs58 from "bs58";
-import nacl from "tweetnacl";
 import { codeHash } from "../src/utils/crypto";
 import { DelegationProof, ActionCode } from "../src/types";
 import {
@@ -265,11 +265,21 @@ describe("ActionCodesProtocol", () => {
         signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
       };
 
+      // Create a real signature for the delegated keypair
+      const canonicalMessage = protocol.delegationStrategy.getCanonicalMessageParts(
+        delegatedKeypair.publicKey.toString()
+      );
+      const delegatedSignature = nacl.sign.detached(
+        canonicalMessage,
+        delegatedKeypair.secretKey
+      );
+      const delegatedSignatureB58 = bs58.encode(delegatedSignature);
+
       // Generate delegated code
       const result = protocol.generateCode(
         "delegation",
         delegationProof,
-        mockDelegatedSignature
+        delegatedSignatureB58
       );
 
       expect(result.actionCode).toBeDefined();
@@ -319,7 +329,7 @@ describe("ActionCodesProtocol", () => {
           delegationProof,
           delegatedSignature: mockDelegatedSignature,
         });
-      }).toThrow("Invalid signature: Delegation signature verification failed");
+      }).toThrow("Invalid signature: Delegated signature verification failed");
     });
 
     test("handles delegation strategy configuration", () => {
@@ -481,7 +491,7 @@ describe("ActionCodesProtocol", () => {
           delegationProof: originalProof,
           delegatedSignature: mockDelegatedSignature,
         });
-        }).toThrow("Action code wallet pubkey does not match delegation proof");
+        }).toThrow("Invalid walletPubkey: Action code wallet pubkey does not match delegation proof");
     });
 
     it("should require signature for wallet strategy to prevent public key + timestamp attacks", async () => {

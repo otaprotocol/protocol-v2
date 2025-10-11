@@ -1,7 +1,9 @@
 import { WalletStrategy } from "./WalletStrategy";
-import { getCanonicalMessageParts } from "../utils/canonical";
+import { getCanonicalMessageParts, serializeCanonical } from "../utils/canonical";
 import { ProtocolError } from "../errors";
 import { PublicKey } from "@solana/web3.js";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
 
 import type {
   DelegationProof,
@@ -29,9 +31,9 @@ export class DelegationStrategy {
     // Validate delegation proof format and expiration
     this.validateDelegationProof(delegationProof);
 
-    // Generate canonical message using the wallet pubkey (user who delegated)
+    // Generate canonical message using the delegated pubkey (the signer)
     const canonicalMessage = getCanonicalMessageParts(
-      delegationProof.walletPubkey,
+      delegationProof.delegatedPubkey,
       this.config.ttlMs
     );
 
@@ -44,6 +46,7 @@ export class DelegationStrategy {
     // Create delegated action code
     const delegatedActionCode: DelegatedActionCode = {
       ...result.actionCode,
+      pubkey: delegationProof.walletPubkey, // Code belongs to the user who delegated
       delegationProof: delegationProof,
       delegatedSignature: delegatedSignature,
     };
@@ -60,8 +63,15 @@ export class DelegationStrategy {
     actionCode: DelegatedActionCode,
     delegationProof: DelegationProof
   ): void {
-    // Validate the action code itself
-    this.walletStrategy.validateCode(actionCode);
+    // Basic validation checks (similar to WalletStrategy.validateCode)
+    const currentTime = Date.now();
+    if (currentTime > actionCode.expiresAt + (this.config.clockSkewMs ?? 0)) {
+      throw ProtocolError.expiredCode(
+        actionCode.code,
+        actionCode.expiresAt,
+        currentTime
+      );
+    }
 
     // Verify delegation proof is still valid
     this.validateDelegationProof(delegationProof);
@@ -107,6 +117,33 @@ export class DelegationStrategy {
     // Verify delegated signature is present
     if (!actionCode.delegatedSignature) {
       throw ProtocolError.missingRequiredField("delegatedSignature");
+    }
+
+    // Finally, verify the delegated signature against the canonical message
+    // Use the original timestamp from the action code, not the current time
+    const canonicalMessage = serializeCanonical({
+      pubkey: delegationProof.delegatedPubkey,
+      windowStart: actionCode.timestamp,
+    });
+    
+    // Decode and verify the delegated signature
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = bs58.decode(actionCode.delegatedSignature);
+    } catch {
+      throw ProtocolError.invalidSignature("Invalid Base58 delegated signature format");
+    }
+
+    // Verify the signature using the delegated keypair's public key
+    const delegatedPubkeyBytes = bs58.decode(delegationProof.delegatedPubkey);
+    const isValidSignature = nacl.sign.detached.verify(
+      canonicalMessage,
+      signatureBytes,
+      delegatedPubkeyBytes
+    );
+
+    if (!isValidSignature) {
+      throw ProtocolError.invalidSignature("Delegated signature verification failed");
     }
   }
 
@@ -174,13 +211,6 @@ export class DelegationStrategy {
       throw ProtocolError.invalidInput("signature", delegationProof.signature, "Delegation signature must be between 1 and 200 characters");
     }
     // Note: Signature format validation will be done during actual verification
-  }
-
-  /**
-   * Get the wallet strategy instance for advanced usage
-   */
-  getWalletStrategy(): WalletStrategy {
-    return this.walletStrategy;
   }
 
   /**
