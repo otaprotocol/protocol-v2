@@ -274,7 +274,7 @@ describe("ActionCodesProtocol", () => {
 
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
-      expect(result.actionCode.pubkey).toBe(delegatedKeypair.publicKey.toString());
+      expect(result.actionCode.pubkey).toBe(testKeypair.publicKey.toString());
       expect(result.actionCode.delegationProof).toBeDefined();
       expect(result.actionCode.delegationProof.walletPubkey).toBe(
         testKeypair.publicKey.toString()
@@ -343,8 +343,8 @@ describe("ActionCodesProtocol", () => {
         signature: "mock-delegation-signature-1",
       };
       const delegationProof2 = {
-        walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: delegatedKeypair2.publicKey.toString(),
+        walletPubkey: delegatedKeypair2.publicKey.toString(), // Different wallet pubkey
+        delegatedPubkey: delegatedKeypair2.publicKey.toString(), // Different delegated pubkey
         expiresAt: Date.now() + 7200000, // 2 hours
         chain: "solana",
         signature: "mock-delegation-signature-2",

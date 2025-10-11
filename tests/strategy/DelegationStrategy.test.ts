@@ -137,8 +137,8 @@ describe("DelegationStrategy", () => {
       };
 
       const proof2: DelegationProof = {
-        walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkey (Solana System Program)
+        walletPubkey: PublicKey.default.toBase58(), // Different wallet pubkey (Solana System Program)
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", // Different delegated pubkey
         expiresAt: Date.now() + 7200000, // Different expiration
         chain: "solana",
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",

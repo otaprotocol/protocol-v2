@@ -29,9 +29,9 @@ export class DelegationStrategy {
     // Validate delegation proof format and expiration
     this.validateDelegationProof(delegationProof);
 
-    // Generate canonical message using the delegated pubkey
+    // Generate canonical message using the wallet pubkey (user who delegated)
     const canonicalMessage = getCanonicalMessageParts(
-      delegationProof.delegatedPubkey,
+      delegationProof.walletPubkey,
       this.config.ttlMs
     );
 
