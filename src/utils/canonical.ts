@@ -39,7 +39,7 @@ export function getCanonicalMessageParts(
   return serializeCanonical({ pubkey, windowStart });
 }
 
-export function serializeDelegationProof(proof: DelegationProof): Uint8Array {
+export function serializeDelegationProof(proof: Omit<DelegationProof, 'signature'>): Uint8Array {
   const json = JSON.stringify({
     walletPubkey: proof.walletPubkey,
     delegatedPubkey: proof.delegatedPubkey,
