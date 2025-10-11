@@ -485,20 +485,31 @@ describe("WalletStrategy", () => {
       const canonicalMessage = createCanonicalMessage("test-pubkey");
       const result = strategy.generateCode(canonicalMessage, "testsignature");
 
-      // Wait for TTL to expire but within clock skew
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Should still validate due to clock skew tolerance
+      // Test that code is valid immediately
       expect(() => {
         strategy.validateCode(result.actionCode);
       }).not.toThrow();
 
-      // Wait beyond clock skew (total wait time > TTL + clock skew)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Create a manually expired action code to test clock skew tolerance
+      const expiredActionCode: ActionCode = {
+        ...result.actionCode,
+        expiresAt: Date.now() - 500, // Expired 500ms ago, but within clock skew
+      };
+
+      // Should still validate due to clock skew tolerance
+      expect(() => {
+        strategy.validateCode(expiredActionCode);
+      }).not.toThrow();
+
+      // Create a more expired action code beyond clock skew
+      const veryExpiredActionCode: ActionCode = {
+        ...result.actionCode,
+        expiresAt: Date.now() - 3000, // Expired 3 seconds ago, beyond clock skew
+      };
 
       // Should now throw expired error
       expect(() => {
-        strategy.validateCode(result.actionCode);
+        strategy.validateCode(veryExpiredActionCode);
       }).toThrow(ExpiredCodeError);
     });
 
