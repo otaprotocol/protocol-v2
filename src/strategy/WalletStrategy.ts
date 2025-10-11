@@ -4,7 +4,6 @@ import type {
   WalletStrategyCodeGenerationResult,
 } from "../types";
 import {
-  sha256,
   hmacSha256,
   truncateBits,
   digestToDigits,
@@ -22,8 +21,7 @@ export class WalletStrategy {
 
   generateCode(
     canonicalMessage: Uint8Array,
-    signature: string,
-    providedSecret?: string
+    signature: string
   ): WalletStrategyCodeGenerationResult {
     const canonical = canonicalMessage;
 
@@ -32,23 +30,10 @@ export class WalletStrategy {
     const pubkey = decoded.pubkey;
     const windowStart = decoded.windowStart;
 
-    // Only use secret if explicitly provided
-    const secret = providedSecret;
-
-    // Use signature if provided, otherwise fall back to secret/HMAC
-    let digest: Uint8Array;
-    if (signature) {
-      // Use signature as the primary entropy source
-      // Decode Base58 signature to bytes
-      const signatureBytes = bs58.decode(signature);
-      digest = hmacSha256(signatureBytes, canonical);
-    } else if (secret) {
-      // Use secret for HMAC
-      digest = hmacSha256(secret, canonical);
-    } else {
-      // Fall back to SHA256 (less secure)
-      digest = sha256(canonical);
-    }
+    // Use signature as the primary entropy source
+    // Decode Base58 signature to bytes
+    const signatureBytes = bs58.decode(signature);
+    const digest = hmacSha256(signatureBytes, canonical);
 
     const clamped = Math.max(
       CODE_MIN_LENGTH,
@@ -63,10 +48,7 @@ export class WalletStrategy {
       pubkey,
       timestamp: windowStart,
       expiresAt: windowStart + this.config.ttlMs,
-      // Include signature if provided
-      ...(signature && { signature }),
-      // Only include secret if provided
-      ...(secret && { secret }),
+      signature,
     };
 
     return { actionCode, canonicalMessage: canonical };
@@ -85,23 +67,17 @@ export class WalletStrategy {
     const canonical = serializeCanonical({
       pubkey: actionCode.pubkey,
       windowStart: actionCode.timestamp,
-      secret: actionCode.secret, // Include secret if available
     });
 
     // Use same digest method as generation
-    let digest: Uint8Array;
-    if (actionCode.signature) {
-      // Use signature as the primary entropy source
-      // Decode Base58 signature to bytes
-      const signatureBytes = bs58.decode(actionCode.signature);
-      digest = hmacSha256(signatureBytes, canonical);
-    } else if (actionCode.secret) {
-      // Use secret for HMAC
-      digest = hmacSha256(actionCode.secret, canonical);
-    } else {
-      // Fall back to SHA256 (less secure)
-      digest = sha256(canonical);
+    if (!actionCode.signature) {
+      throw ProtocolError.missingRequiredField("signature");
     }
+    
+    // Use signature as the primary entropy source
+    // Decode Base58 signature to bytes
+    const signatureBytes = bs58.decode(actionCode.signature);
+    const digest = hmacSha256(signatureBytes, canonical);
 
     const clamped = Math.max(
       CODE_MIN_LENGTH,
@@ -116,10 +92,7 @@ export class WalletStrategy {
   }
 
   // Instance method for accessing canonical functions
-  getCanonicalMessageParts(
-    pubkey: string,
-    providedSecret?: string
-  ): Uint8Array {
-    return getCanonicalMessageParts(pubkey, this.config.ttlMs, providedSecret);
+  getCanonicalMessageParts(pubkey: string): Uint8Array {
+    return getCanonicalMessageParts(pubkey, this.config.ttlMs);
   }
 }

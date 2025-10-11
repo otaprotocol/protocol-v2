@@ -256,10 +256,12 @@ describe("ActionCodesProtocol", () => {
 
     test("generates and validates delegated codes", async () => {
       // Create a delegation proof
+      const delegatedKeypair = Keypair.generate();
       const delegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: delegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour from now
+        chain: "solana",
         signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
       };
 
@@ -272,7 +274,7 @@ describe("ActionCodesProtocol", () => {
 
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
-      expect(result.actionCode.pubkey).toBe("delegated-pubkey");
+      expect(result.actionCode.pubkey).toBe(delegatedKeypair.publicKey.toString());
       expect(result.actionCode.delegationProof).toBeDefined();
       expect(result.actionCode.delegationProof.walletPubkey).toBe(
         testKeypair.publicKey.toString()
@@ -289,10 +291,12 @@ describe("ActionCodesProtocol", () => {
 
     test("validates delegated codes with protocol validation", async () => {
       // Create a delegation proof
+      const delegatedKeypair = Keypair.generate();
       const delegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: delegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour from now
+        chain: "solana",
         signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
       };
 
@@ -308,12 +312,14 @@ describe("ActionCodesProtocol", () => {
       expect(() => {
         protocol.validateCode("delegation", result.actionCode, {
           chain: "solana",
-          pubkey: delegationProof.walletPubkey,
-          signature: delegationProof.signature,
+          message: {
+            pubkey: delegationProof.walletPubkey,
+            windowStart: result.actionCode.timestamp,
+          },
           delegationProof,
           delegatedSignature: mockDelegatedSignature,
         });
-      }).toThrow("Signature verification failed");
+      }).toThrow("Invalid signature: Delegation signature verification failed");
     });
 
     test("handles delegation strategy configuration", () => {
@@ -327,16 +333,20 @@ describe("ActionCodesProtocol", () => {
 
     test("generates different delegated codes for different proofs", async () => {
       // Create two different delegation proofs
+      const delegatedKeypair1 = Keypair.generate();
+      const delegatedKeypair2 = Keypair.generate();
       const delegationProof1 = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey-1",
+        delegatedPubkey: delegatedKeypair1.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour
+        chain: "solana",
         signature: "mock-delegation-signature-1",
       };
       const delegationProof2 = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey-2",
+        delegatedPubkey: delegatedKeypair2.publicKey.toString(),
         expiresAt: Date.now() + 7200000, // 2 hours
+        chain: "solana",
         signature: "mock-delegation-signature-2",
       };
 
@@ -361,10 +371,12 @@ describe("ActionCodesProtocol", () => {
 
     test("validates delegated code expiration", async () => {
       // Create an expired delegation proof
+      const expiredDelegatedKeypair = Keypair.generate();
       const expiredDelegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: expiredDelegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() - 1000, // Expired 1 second ago
+        chain: "solana",
         signature: "mock-delegation-signature",
       };
 
@@ -380,10 +392,12 @@ describe("ActionCodesProtocol", () => {
 
     it("should reject codes with stolen signatures during validation", async () => {
       // 1. Generate valid delegation proof and code
+      const originalDelegatedKeypair = Keypair.generate();
       const originalDelegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: originalDelegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour from now
+        chain: "solana",
         signature: "original-delegation-signature",
       };
       const originalResult = await protocol.generateCode(
@@ -394,10 +408,12 @@ describe("ActionCodesProtocol", () => {
       const originalCode = originalResult.actionCode;
 
       // 2. Create fake delegation proof with stolen signature but different data
+      const fakeDelegatedKeypair = Keypair.generate();
       const fakeDelegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "different-delegated-pubkey", // Different delegated pubkey
+        delegatedPubkey: fakeDelegatedKeypair.publicKey.toString(), // Different delegated pubkey
         expiresAt: originalDelegationProof.expiresAt, // Same expiration
+        chain: "solana",
         signature: originalDelegationProof.signature, // Same signature (stolen)
       };
 
@@ -418,15 +434,17 @@ describe("ActionCodesProtocol", () => {
           delegationProof: originalDelegationProof,
           delegatedSignature: mockDelegatedSignature,
         });
-      }).toThrow("Action code delegated pubkey does not match delegation proof");
+      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
     });
 
     it("should reject codes with stolen signatures and different delegator during validation", async () => {
       // 1. Generate valid delegation proof and code
+      const originalDelegatedKeypair = Keypair.generate();
       const originalDelegationProof = {
         walletPubkey: testKeypair.publicKey.toString(),
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: originalDelegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000, // 1 hour from now
+        chain: "solana",
         signature: "original-delegation-signature",
       };
       // Use the delegation proof directly (signature would be created by wallet in real usage)
@@ -439,9 +457,10 @@ describe("ActionCodesProtocol", () => {
       const originalCode = originalResult.actionCode;
 
       // 2. Create fake proof with stolen signature but different delegator
+      const attackerKeypair = Keypair.generate();
       const fakeProof: DelegationProof = {
         ...originalProof,
-        walletPubkey: "attackerpubkey", // Different delegator
+        walletPubkey: attackerKeypair.publicKey.toString(), // Different delegator
         signature: originalProof.signature, // Same signature (stolen)
       };
 
@@ -541,7 +560,7 @@ describe("ActionCodesProtocol", () => {
           },
           walletSignature: attackerSignature,
         });
-      }).toThrow("Signature verification failed");
+      }).toThrow("Invalid signature: Wallet signature verification failed");
     });
   });
 

@@ -14,8 +14,6 @@ export function serializeCanonical(parts: CanonicalMessageParts): Uint8Array {
     ver: CANONICAL_MESSAGE_VERSION,
     pubkey: parts.pubkey,
     windowStart: parts.windowStart,
-    // Include secret if provided for enhanced security
-    ...(parts.secret && { secret: parts.secret }),
   });
   return new TextEncoder().encode(json);
 }
@@ -35,11 +33,10 @@ export function serializeCanonicalRevoke(
 
 export function getCanonicalMessageParts(
   pubkey: string,
-  ttlMs: number,
-  providedSecret?: string
+  ttlMs: number
 ): Uint8Array {
   const windowStart = Math.floor(Date.now() / ttlMs) * ttlMs;
-  return serializeCanonical({ pubkey, windowStart, secret: providedSecret });
+  return serializeCanonical({ pubkey, windowStart });
 }
 
 export function serializeDelegationProof(proof: DelegationProof): Uint8Array {
@@ -47,6 +44,7 @@ export function serializeDelegationProof(proof: DelegationProof): Uint8Array {
     walletPubkey: proof.walletPubkey,
     delegatedPubkey: proof.delegatedPubkey,
     expiresAt: proof.expiresAt,
+    chain: proof.chain,
   });
   return new TextEncoder().encode(json);
 }

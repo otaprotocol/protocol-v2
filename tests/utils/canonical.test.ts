@@ -26,24 +26,6 @@ describe("canonical utils", () => {
       });
     });
 
-    it("should include secret when provided", () => {
-      const parts = {
-        pubkey: "test-pubkey-123",
-        windowStart: 1234567890,
-        secret: "test-secret",
-      };
-
-      const result = serializeCanonical(parts);
-      const decoded = JSON.parse(new TextDecoder().decode(result));
-
-      expect(decoded).toEqual({
-        id: "actioncodes",
-        ver: 1,
-        pubkey: "test-pubkey-123",
-        windowStart: 1234567890,
-        secret: "test-secret",
-      });
-    });
 
     it("should produce deterministic output", () => {
       const parts = {
@@ -105,7 +87,6 @@ describe("canonical utils", () => {
       const parts = {
         pubkey: "test-pubkey-123",
         windowStart: 1234567890,
-        secret: "test-secret",
       };
 
       const result = serializeCanonical(parts);
@@ -134,7 +115,6 @@ describe("canonical utils", () => {
       const parts = {
         pubkey: "test-pubkey-123",
         windowStart: 1234567890,
-        secret: "test-secret",
       };
 
       const result = serializeCanonical(parts);
@@ -233,6 +213,7 @@ describe("canonical utils", () => {
         delegatedPubkey: "delegated-pubkey-456",
         expiresAt: 1234567890 + 3600000,
         signature: "test-signature-456",
+        chain: "test-chain",
       };
 
       const result = serializeDelegationProof(proof);
@@ -242,6 +223,7 @@ describe("canonical utils", () => {
         walletPubkey: "user-pubkey-123",
         delegatedPubkey: "delegated-pubkey-456",
         expiresAt: 1234567890 + 3600000,
+        chain: "test-chain",
       });
     });
 
@@ -251,6 +233,7 @@ describe("canonical utils", () => {
         delegatedPubkey: "delegated-pubkey-456",
         expiresAt: 1234567890 + 3600000,
         signature: "test-signature-456",
+        chain: "test-chain",
       };
 
       const result1 = serializeDelegationProof(proof);
@@ -265,6 +248,7 @@ describe("canonical utils", () => {
         delegatedPubkey: "delegated-pubkey-456",
         expiresAt: 1234567890 + 3600000,
         signature: "test-signature-456",
+        chain: "test-chain",
       };
 
       const proof2: DelegationProof = {
@@ -283,27 +267,6 @@ describe("canonical utils", () => {
     it("should generate canonical message with provided TTL", () => {
       const pubkey = "test-pubkey-123";
       const ttlMs = 120000; // 2 minutes
-      const providedSecret = "test-secret";
-
-      const result = getCanonicalMessageParts(pubkey, ttlMs, providedSecret);
-      const decoded = JSON.parse(new TextDecoder().decode(result));
-
-      expect(decoded).toEqual({
-        id: "actioncodes",
-        ver: 1,
-        pubkey: "test-pubkey-123",
-        windowStart: expect.any(Number),
-        secret: "test-secret",
-      });
-
-      // Check that windowStart is aligned to TTL
-      const windowStart = decoded.windowStart;
-      expect(windowStart % ttlMs).toBe(0);
-    });
-
-    it("should generate canonical message without secret", () => {
-      const pubkey = "test-pubkey-123";
-      const ttlMs = 120000;
 
       const result = getCanonicalMessageParts(pubkey, ttlMs);
       const decoded = JSON.parse(new TextDecoder().decode(result));
@@ -315,7 +278,9 @@ describe("canonical utils", () => {
         windowStart: expect.any(Number),
       });
 
-      expect(decoded.secret).toBeUndefined();
+      // Check that windowStart is aligned to TTL
+      const windowStart = decoded.windowStart;
+      expect(windowStart % ttlMs).toBe(0);
     });
 
     it("should align windowStart to TTL boundary", () => {
@@ -335,7 +300,6 @@ describe("canonical utils", () => {
     it("should produce deterministic output for same inputs", () => {
       const pubkey = "test-pubkey-123";
       const ttlMs = 120000;
-      const secret = "test-secret";
 
       // Mock Date.now to return consistent time
       const originalNow = Date.now;
@@ -343,8 +307,8 @@ describe("canonical utils", () => {
       Date.now = () => mockTime;
 
       try {
-        const result1 = getCanonicalMessageParts(pubkey, ttlMs, secret);
-        const result2 = getCanonicalMessageParts(pubkey, ttlMs, secret);
+        const result1 = getCanonicalMessageParts(pubkey, ttlMs);
+        const result2 = getCanonicalMessageParts(pubkey, ttlMs);
 
         expect(result1).toEqual(result2);
       } finally {
@@ -354,7 +318,6 @@ describe("canonical utils", () => {
 
     it("should produce different output for different TTLs when they align to different windows", () => {
       const pubkey = "test-pubkey-123";
-      const secret = "test-secret";
 
       // Use a fixed time to ensure different TTLs align to different windows
       const originalNow = Date.now;
@@ -362,8 +325,8 @@ describe("canonical utils", () => {
       Date.now = () => mockTime;
 
       try {
-        const result1 = getCanonicalMessageParts(pubkey, 120000, secret); // 2 minutes
-        const result2 = getCanonicalMessageParts(pubkey, 300000, secret); // 5 minutes
+        const result1 = getCanonicalMessageParts(pubkey, 120000); // 2 minutes
+        const result2 = getCanonicalMessageParts(pubkey, 300000); // 5 minutes
 
         // Different TTLs should align to different windows at this specific time
         const window1 = Math.floor(mockTime / 120000) * 120000;

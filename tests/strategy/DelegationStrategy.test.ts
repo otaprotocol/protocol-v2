@@ -7,6 +7,7 @@ import type {
   DelegatedActionCode,
 } from "../../src/types";
 import bs58 from "bs58";
+import { PublicKey, Keypair } from "@solana/web3.js";
 
 // Mock wallet for testing
 class MockWallet {
@@ -49,8 +50,9 @@ describe("DelegationStrategy", () => {
     // Create a valid delegation proof
     delegationProof = {
       walletPubkey: mockWallet.publicKey,
-      delegatedPubkey: "delegated-pubkey",
+      delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       expiresAt: Date.now() + 3600000, // 1 hour from now
+      chain: "solana",
       signature: "mock-delegation-signature", // In real usage, this would be the wallet's signature
     };
   });
@@ -59,16 +61,18 @@ describe("DelegationStrategy", () => {
     it("should create a valid delegation proof", () => {
       const proof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       expect(proof).toEqual({
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: expect.any(Number),
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       });
 
       expect(proof.expiresAt).toBeGreaterThan(Date.now());
@@ -77,24 +81,26 @@ describe("DelegationStrategy", () => {
     it("should validate delegation proof structure", () => {
       const proof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       expect(proof.walletPubkey).toBe(mockWallet.publicKey);
-      expect(proof.delegatedPubkey).toBe("delegated-pubkey");
+      expect(proof.delegatedPubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
       expect(proof.expiresAt).toBeGreaterThan(Date.now());
-      expect(proof.signature).toBe("mock-signature");
+      expect(proof.signature).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
     });
 
     it("should handle expiration correctly", () => {
       const now = Date.now();
       const proof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: now + 7200000, // 2 hours
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       expect(proof.expiresAt).toBe(now + 7200000);
@@ -107,10 +113,10 @@ describe("DelegationStrategy", () => {
 
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
-      expect(result.actionCode.pubkey).toBe("delegated-pubkey");
+      expect(result.actionCode.pubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
       expect(result.actionCode.delegationProof).toBeDefined();
       expect(result.actionCode.delegationProof.walletPubkey).toBe(mockWallet.publicKey);
-      expect(result.actionCode.delegationProof.delegatedPubkey).toBe("delegated-pubkey");
+      expect(result.actionCode.delegationProof.delegatedPubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
       expect(result.actionCode.delegatedSignature).toBe(mockDelegatedSignature);
     });
 
@@ -124,16 +130,18 @@ describe("DelegationStrategy", () => {
     it("should generate different codes for different delegation proofs", () => {
       const proof1: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-1",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-1",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const proof2: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-2",
-        expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-2",
+        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkey (Solana System Program)
+        expiresAt: Date.now() + 7200000, // Different expiration
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const result1 = strategy.generateDelegatedCode(proof1, mockDelegatedSignature);
@@ -145,9 +153,10 @@ describe("DelegationStrategy", () => {
     it("should throw error for expired delegation proof", () => {
       const expiredProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() - 1000, // Expired
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       expect(() => {
@@ -158,9 +167,10 @@ describe("DelegationStrategy", () => {
     it("should throw error for missing wallet pubkey", () => {
       const invalidProof: DelegationProof = {
         walletPubkey: "",
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       expect(() => {
@@ -173,7 +183,8 @@ describe("DelegationStrategy", () => {
         walletPubkey: mockWallet.publicKey,
         delegatedPubkey: "",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       expect(() => {
@@ -195,9 +206,10 @@ describe("DelegationStrategy", () => {
     it("should throw error for expired delegation proof", () => {
       const expiredProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() - 1000, // Expired
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const result = strategy.generateDelegatedCode(delegationProof, mockDelegatedSignature);
@@ -211,9 +223,10 @@ describe("DelegationStrategy", () => {
     it("should throw error for mismatched wallet pubkey", () => {
       const differentProof: DelegationProof = {
         walletPubkey: "different-wallet-pubkey",
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const result = strategy.generateDelegatedCode(delegationProof, mockDelegatedSignature);
@@ -221,15 +234,17 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, differentProof);
-      }).toThrow("Action code wallet pubkey does not match delegation proof");
+      }).toThrow("Invalid wallet pubkey format");
     });
 
     it("should throw error for mismatched delegated pubkey", () => {
+      const differentDelegatedKeypair = Keypair.generate();
       const differentProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "different-delegated-pubkey",
+        delegatedPubkey: differentDelegatedKeypair.publicKey.toString(),
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "mock-delegation-signature", // Same signature as original
       };
 
       const result = strategy.generateDelegatedCode(delegationProof, mockDelegatedSignature);
@@ -237,15 +252,16 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, differentProof);
-      }).toThrow("Action code delegated pubkey does not match delegation proof");
+      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
     });
 
     it("should throw error for mismatched expiration", () => {
       const differentProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 7200000, // Different expiration
-        signature: "mock-signature",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const result = strategy.generateDelegatedCode(delegationProof, mockDelegatedSignature);
@@ -259,8 +275,9 @@ describe("DelegationStrategy", () => {
     it("should throw error for mismatched signature", () => {
       const differentProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
+        chain: "solana",
         signature: "different-signature",
       };
 
@@ -269,7 +286,7 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, differentProof);
-      }).toThrow("Action code delegation signature does not match delegation proof");
+      }).toThrow("Invalid signature: Action code delegation signature does not match delegation proof");
     });
   });
 
@@ -279,7 +296,7 @@ describe("DelegationStrategy", () => {
 
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
-      expect(result.actionCode.pubkey).toBe("delegated-pubkey");
+      expect(result.actionCode.pubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
       expect(result.actionCode.delegationProof).toBeDefined();
     });
 
@@ -331,16 +348,18 @@ describe("DelegationStrategy", () => {
     it("should reject action codes generated from different delegation proofs", () => {
       const proof1: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-1",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-1",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const proof2: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-2",
+        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkey
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-2",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const result1 = strategy.generateDelegatedCode(proof1, mockDelegatedSignature);
@@ -348,7 +367,7 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode1, proof2);
-      }).toThrow("Action code delegated pubkey does not match delegation proof");
+      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
     });
 
     it("should reject action codes with tampered secrets", () => {
@@ -408,6 +427,7 @@ describe("DelegationStrategy", () => {
         walletPubkey: "wrong-wallet",
         delegatedPubkey: "wrong-delegated",
         expiresAt: Date.now() + 3600000,
+        chain: "solana",
         signature: "wrong-signature",
       };
 
@@ -416,7 +436,7 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, wrongProof);
-      }).toThrow("Action code wallet pubkey does not match delegation proof");
+      }).toThrow("Invalid wallet pubkey format");
     });
   });
 
@@ -425,8 +445,9 @@ describe("DelegationStrategy", () => {
       // Attacker steals the delegation proof
       const stolenProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
+        chain: "solana",
         signature: "stolen-signature", // Attacker has this
       };
 
@@ -442,8 +463,9 @@ describe("DelegationStrategy", () => {
     it("should prevent delegation proof tampering attacks", () => {
       const originalProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
+        chain: "solana",
         signature: "original-signature",
       };
 
@@ -452,6 +474,7 @@ describe("DelegationStrategy", () => {
         walletPubkey: "attacker-wallet", // Different wallet
         delegatedPubkey: "attacker-delegated", // Different delegated key
         expiresAt: Date.now() + 7200000, // Different expiration
+        chain: "solana",
         signature: "original-signature", // Same signature (stolen)
       };
 
@@ -462,22 +485,24 @@ describe("DelegationStrategy", () => {
       // Try to validate with tampered proof - should fail
       expect(() => {
         strategy.validateDelegatedCode(originalActionCode, tamperedProof);
-      }).toThrow("Action code wallet pubkey does not match delegation proof");
+      }).toThrow("Invalid wallet pubkey format");
     });
 
     it("should prevent delegation proof expiration extension attacks", () => {
       const originalProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000, // 1 hour
+        chain: "solana",
         signature: "original-signature",
       };
 
       // Attacker tries to extend expiration
       const extendedProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 7200000, // 2 hours (extended)
+        chain: "solana",
         signature: "original-signature", // Same signature
       };
 
@@ -494,16 +519,18 @@ describe("DelegationStrategy", () => {
     it("should prevent delegation proof signature substitution attacks", () => {
       const originalProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
+        chain: "solana",
         signature: "original-signature",
       };
 
       // Attacker tries to substitute signature
       const substitutedProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
+        chain: "solana",
         signature: "attacker-signature", // Different signature
       };
 
@@ -514,22 +541,24 @@ describe("DelegationStrategy", () => {
       // Try to validate with substituted proof - should fail
       expect(() => {
         strategy.validateDelegatedCode(originalActionCode, substitutedProof);
-      }).toThrow("Action code delegation signature does not match delegation proof");
+      }).toThrow("Invalid signature: Action code delegation signature does not match delegation proof");
     });
 
     it("should prevent cross-delegation attacks", () => {
       const proofA: DelegationProof = {
-        walletPubkey: "wallet-A",
-        delegatedPubkey: "delegated-A",
+        walletPubkey: mockWallet.publicKey,
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "signature-A",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const proofB: DelegationProof = {
-        walletPubkey: "wallet-B",
-        delegatedPubkey: "delegated-B",
+        walletPubkey: mockWallet.publicKey,
+        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkey
         expiresAt: Date.now() + 3600000,
-        signature: "signature-B",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       // Generate code with proof A
@@ -539,14 +568,15 @@ describe("DelegationStrategy", () => {
       // Try to validate with proof B - should fail
       expect(() => {
         strategy.validateDelegatedCode(actionCodeA, proofB);
-      }).toThrow("Action code wallet pubkey does not match delegation proof");
+      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
     });
 
     it("should prevent delegation proof replay after expiration", () => {
       const expiredProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() - 1000, // Expired
+        chain: "solana",
         signature: "expired-signature",
       };
 
@@ -559,8 +589,9 @@ describe("DelegationStrategy", () => {
     it("should prevent delegation proof replay with future timestamps", () => {
       const futureProof: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 86400000, // 24 hours (too far in future)
+        chain: "solana",
         signature: "future-signature",
       };
 
@@ -574,16 +605,18 @@ describe("DelegationStrategy", () => {
     it("should reject code generated from DelegationProof A when validated with DelegationProof B", () => {
       const proofA: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-A",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-A",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const proofB: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-B",
+        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkey
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-B",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const resultA = strategy.generateDelegatedCode(proofA, mockDelegatedSignature);
@@ -591,15 +624,16 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCodeA, proofB);
-      }).toThrow("Action code delegated pubkey does not match delegation proof");
+      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
     });
 
     it("should accept code generated from DelegationProof A when validated with DelegationProof A", () => {
       const proofA: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-A",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-A",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const resultA = strategy.generateDelegatedCode(proofA, mockDelegatedSignature);
@@ -613,16 +647,18 @@ describe("DelegationStrategy", () => {
     it("should reject code generated from DelegationProof B when validated with DelegationProof A", () => {
       const proofA: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-A",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-A",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const proofB: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-B",
+        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkey
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-B",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const resultB = strategy.generateDelegatedCode(proofB, mockDelegatedSignature);
@@ -630,22 +666,24 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCodeB, proofA);
-      }).toThrow("Action code delegated pubkey does not match delegation proof");
+      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
     });
 
     it("should have different delegated pubkeys for different delegation proofs", () => {
       const proofA: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-A",
+        delegatedPubkey: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-A",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const proofB: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
-        delegatedPubkey: "delegated-pubkey-B",
+        delegatedPubkey: PublicKey.default.toBase58(), // Different delegated pubkeyu
         expiresAt: Date.now() + 3600000,
-        signature: "mock-signature-B",
+        chain: "solana",
+        signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
       const resultA = strategy.generateDelegatedCode(proofA, mockDelegatedSignature);
@@ -654,8 +692,8 @@ describe("DelegationStrategy", () => {
       const actionCodeA = resultA.actionCode as DelegatedActionCode;
       const actionCodeB = resultB.actionCode as DelegatedActionCode;
 
-      expect(actionCodeA.delegationProof.delegatedPubkey).toBe("delegated-pubkey-A");
-      expect(actionCodeB.delegationProof.delegatedPubkey).toBe("delegated-pubkey-B");
+      expect(actionCodeA.delegationProof.delegatedPubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+      expect(actionCodeB.delegationProof.delegatedPubkey).toBe(PublicKey.default.toBase58());
       expect(actionCodeA.delegationProof.delegatedPubkey).not.toBe(actionCodeB.delegationProof.delegatedPubkey);
     });
 

@@ -104,9 +104,15 @@ export class SolanaAdapter extends BaseChainAdapter<
     if (
       !proof.walletPubkey ||
       !proof.delegatedPubkey ||
+      !proof.chain ||
       !proof.expiresAt ||
       !proof.signature
     ) {
+      return false;
+    }
+
+    // Validate chain matches adapter
+    if (proof.chain !== ADAPTER_CHAIN_NAME) {
       return false;
     }
 
@@ -122,28 +128,36 @@ export class SolanaAdapter extends BaseChainAdapter<
       const walletPub = this.normalizePubkey(proof.walletPubkey);
       const walletSigBytes = bs58.decode(proof.signature);
       const walletPubBytes = walletPub.toBytes();
+      
+      const canonicalMessage = serializeCanonical(context.message);
+      const delegatedPub = this.normalizePubkey(proof.delegatedPubkey);
+      const delegatedSigBytes = bs58.decode(context.delegatedSignature);
+      const delegatedPubBytes = delegatedPub.toBytes();
+      
+      // Validate lengths first to prevent timing attacks
       if (walletSigBytes.length !== 64 || walletPubBytes.length !== 32) {
         return false;
       }
+      if (delegatedSigBytes.length !== 64 || delegatedPubBytes.length !== 32) {
+        return false;
+      }
+      
+      // Perform both signature verifications regardless of first result
+      // This prevents timing attacks that could leak information about which signature failed
       const walletOk = nacl.sign.detached.verify(
         delegationMessage,
         walletSigBytes,
         walletPubBytes
       );
-      if (!walletOk) return false;
-
-      const canonicalMessage = serializeCanonical(context.message);
-      const delegatedPub = this.normalizePubkey(proof.delegatedPubkey);
-      const delegatedSigBytes = bs58.decode(context.delegatedSignature);
-      const delegatedPubBytes = delegatedPub.toBytes();
-      if (delegatedSigBytes.length !== 64 || delegatedPubBytes.length !== 32) {
-        return false;
-      }
-      return nacl.sign.detached.verify(
+      
+      const delegatedOk = nacl.sign.detached.verify(
         canonicalMessage,
         delegatedSigBytes,
         delegatedPubBytes
       );
+      
+      // Return result only after both operations complete
+      return walletOk && delegatedOk;
     } catch {
       // All errors result in false with consistent timing
       return false;
@@ -194,9 +208,15 @@ export class SolanaAdapter extends BaseChainAdapter<
     if (
       !proof.walletPubkey ||
       !proof.delegatedPubkey ||
+      !proof.chain ||
       !proof.expiresAt ||
       !proof.signature
     ) {
+      return false;
+    }
+
+    // Validate chain matches adapter
+    if (proof.chain !== ADAPTER_CHAIN_NAME) {
       return false;
     }
 

@@ -15,9 +15,9 @@ import type {
 import { createHash, createHmac } from "node:crypto";
 
 // Helper function to create canonical message for testing
-function createCanonicalMessage(pubkey: string, secret?: string): Uint8Array {
+function createCanonicalMessage(pubkey: string): Uint8Array {
   const windowStart = Math.floor(Date.now() / 120000) * 120000; // 2 minute TTL
-  return serializeCanonical({ pubkey, windowStart, secret });
+  return serializeCanonical({ pubkey, windowStart });
 }
 
 describe("Cross-System Compatibility", () => {

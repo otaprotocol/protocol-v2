@@ -62,8 +62,7 @@ export class ActionCodesProtocol {
   generateCode(
     strategy: "wallet",
     canonicalMessage: Uint8Array,
-    signature: string,
-    providedSecret?: string
+    signature: string
   ): {
     actionCode: ActionCode;
     canonicalMessage: Uint8Array;
@@ -78,8 +77,7 @@ export class ActionCodesProtocol {
   generateCode(
     strategy: "wallet" | "delegation",
     param1: Uint8Array | DelegationProof,
-    signature?: string,
-    providedSecret?: string
+    signature?: string
   ): {
     actionCode: ActionCode | DelegatedActionCode;
     canonicalMessage?: Uint8Array;
@@ -91,11 +89,7 @@ export class ActionCodesProtocol {
           "Missing signature over canonical message"
         );
       }
-      return this.walletStrategy.generateCode(
-        param1 as Uint8Array,
-        signature,
-        providedSecret
-      );
+      return this.walletStrategy.generateCode(param1 as Uint8Array, signature);
     } else {
       // Here param1 must be DelegationProof
       if (!signature) {
@@ -143,7 +137,9 @@ export class ActionCodesProtocol {
       } as unknown as WalletContext<unknown>);
 
       if (!ok) {
-        throw new Error("Signature verification failed");
+        throw ProtocolError.invalidSignature(
+          "Wallet signature verification failed"
+        );
       }
     } else {
       const context = param2 as Omit<DelegatedContext<unknown>, "message">;
@@ -168,7 +164,9 @@ export class ActionCodesProtocol {
       } as unknown as DelegatedContext<unknown>);
 
       if (!ok) {
-        throw new Error("Signature verification failed");
+        throw ProtocolError.invalidSignature(
+          "Delegation signature verification failed"
+        );
       }
     }
   }

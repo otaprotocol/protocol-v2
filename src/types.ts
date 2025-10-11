@@ -4,16 +4,11 @@ export interface ActionCode {
   timestamp: number;
   expiresAt: number;
   signature?: string;
-  secretHint?: string;
-  // optional secret for offline generation
-  secret?: string; // Base64 encoded secret
 }
 
 export interface CanonicalMessageParts {
   pubkey: string;
   windowStart: number;
-  // optional secret for deterministic but secure generation
-  secret?: string; // Base64 encoded secret
 }
 
 export interface CanonicalRevokeMessageParts {
@@ -41,7 +36,8 @@ export interface DelegationProof {
   walletPubkey: string;     // User's public key
   delegatedPubkey: string;  // Delegated keypair's public key
   expiresAt: number;        // Unix timestamp
-  signature: string;        // User's signature over: walletPubkey + delegatedPubkey + expiresAt
+  chain: string;            // Target blockchain chain
+  signature: string;        // User's signature over: walletPubkey + delegatedPubkey + expiresAt + chain
 }
 
 export interface DelegatedActionCode extends ActionCode {

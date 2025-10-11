@@ -97,10 +97,3 @@ export function codeHash(code: string): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
-
-// Generate a cryptographically secure random secret
-export function generateRandomSecret(): string {
-  const randomBytes = new Uint8Array(32);
-  crypto.getRandomValues(randomBytes);
-  return btoa(String.fromCharCode(...randomBytes));
-}

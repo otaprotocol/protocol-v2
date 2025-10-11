@@ -1055,6 +1055,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000, // 1 hour from now
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
@@ -1090,6 +1091,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000,
+          chain: "solana",
           signature: "invalid-signature", // Invalid signature
         };
 
@@ -1106,7 +1108,7 @@ describe("SolanaAdapter", () => {
           chain: "solana",
           message: canonicalMessageParts,
           delegatedSignature: delegatedSignatureB58,
-          delegationProof,
+          delegationProof,  
         };
 
         const result = adapter.verifyWithDelegation(context);
@@ -1117,6 +1119,7 @@ describe("SolanaAdapter", () => {
         const delegationProof = {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
+          chain: "solana",
           expiresAt: Date.now() + 3600000,
           signature: "", // Will be filled below
         };
@@ -1147,6 +1150,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() - 3600000, // 1 hour ago (expired)
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
@@ -1179,6 +1183,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000,
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
@@ -1215,6 +1220,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000, // 1 hour from now
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
@@ -1251,6 +1257,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000,
+          chain: "solana",
           signature: "invalid-wallet-signature", // Invalid signature
         };
 
@@ -1280,6 +1287,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000,
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
@@ -1310,6 +1318,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() - 3600000, // 1 hour ago (expired)
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
@@ -1343,6 +1352,7 @@ describe("SolanaAdapter", () => {
           walletPubkey: walletKeypair.publicKey.toString(),
           delegatedPubkey: delegatedKeypair.publicKey.toString(),
           expiresAt: Date.now() + 3600000,
+          chain: "solana",
           signature: "", // Will be filled below
         };
 
