@@ -174,7 +174,7 @@ describe("WalletStrategy", () => {
 
       expect(() => {
         strategy.validateCode(actionCode);
-      }).toThrow("Invalid code:");
+      }).toThrow("Invalid code provided");
     });
 
     test("validates code without secret when generated without secret", async () => {

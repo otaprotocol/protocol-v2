@@ -43,11 +43,11 @@ export class ProtocolError extends Error {
     return new ExpiredCodeError(code, expiresAt, currentTime);
   }
 
-  static invalidCode(expected: string, actual: string): ProtocolError {
+  static invalidCode(): ProtocolError {
     return new ProtocolError(
       ProtocolErrorCode.INVALID_CODE,
-      `Invalid code: expected '${expected}', got '${actual}'`,
-      { expected, actual }
+      "Invalid code provided",
+      {}
     );
   }
 

@@ -32,7 +32,12 @@ export class WalletStrategy {
 
     // Use signature as the primary entropy source
     // Decode Base58 signature to bytes
-    const signatureBytes = bs58.decode(signature);
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = bs58.decode(signature);
+    } catch {
+      throw ProtocolError.invalidSignature("Invalid Base58 signature format");
+    }
     const digest = hmacSha256(signatureBytes, canonical);
 
     const clamped = Math.max(
@@ -76,7 +81,12 @@ export class WalletStrategy {
     
     // Use signature as the primary entropy source
     // Decode Base58 signature to bytes
-    const signatureBytes = bs58.decode(actionCode.signature);
+    let signatureBytes: Uint8Array;
+    try {
+      signatureBytes = bs58.decode(actionCode.signature);
+    } catch {
+      throw ProtocolError.invalidSignature("Invalid Base58 signature format");
+    }
     const digest = hmacSha256(signatureBytes, canonical);
 
     const clamped = Math.max(
@@ -87,7 +97,7 @@ export class WalletStrategy {
     const expected = digestToDigits(truncated, clamped);
 
     if (expected !== actionCode.code) {
-      throw ProtocolError.invalidCode(expected, actionCode.code);
+      throw ProtocolError.invalidCode();
     }
   }
 

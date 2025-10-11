@@ -406,7 +406,7 @@ describe("DelegationStrategy", () => {
       // This should throw during generation due to invalid base58
       expect(() => {
         strategy.generateDelegatedCode(delegationProof, fakeSignature);
-      }).toThrow("Non-base58 character");
+      }).toThrow("Invalid Base58 signature format");
     });
 
     it("should allow relayer to validate multiple codes from same delegation proof", () => {
