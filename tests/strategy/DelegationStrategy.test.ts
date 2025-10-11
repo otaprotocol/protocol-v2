@@ -1,11 +1,11 @@
 import { describe, it, test, expect, beforeEach } from "bun:test";
 import { DelegationStrategy } from "../../src/strategy/DelegationStrategy";
 import { SolanaAdapter } from "../../src/adapters/SolanaAdapter";
-import { serializeDelegationProof, getCanonicalMessageParts } from "../../src/utils/canonical";
-import type {
-  DelegationProof,
-  DelegatedActionCode,
-} from "../../src/types";
+import {
+  serializeDelegationProof,
+  getCanonicalMessageParts,
+} from "../../src/utils/canonical";
+import type { DelegationProof, DelegatedActionCode } from "../../src/types";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { PublicKey, Keypair } from "@solana/web3.js";
@@ -21,7 +21,7 @@ class MockWallet {
     const messageHash = message.slice(0, 32);
     signature.set(messageHash, 0);
     signature.set(messageHash, 32);
-    
+
     // Convert to base58 (simulating what a real wallet would do)
     return bs58.encode(signature);
   }
@@ -57,7 +57,10 @@ describe("DelegationStrategy", () => {
 
     // Create delegated keypair for real signatures
     delegatedKeypair = Keypair.generate();
-    realDelegatedSignature = createRealDelegatedSignature(delegatedKeypair, strategy);
+    realDelegatedSignature = createRealDelegatedSignature(
+      delegatedKeypair,
+      strategy
+    );
 
     // Create mock wallet
     const privateKey = new Uint8Array(32);
@@ -108,9 +111,13 @@ describe("DelegationStrategy", () => {
       };
 
       expect(proof.walletPubkey).toBe(mockWallet.publicKey);
-      expect(proof.delegatedPubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+      expect(proof.delegatedPubkey).toBe(
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      );
       expect(proof.expiresAt).toBeGreaterThan(Date.now());
-      expect(proof.signature).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+      expect(proof.signature).toBe(
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      );
     });
 
     it("should handle expiration correctly", () => {
@@ -129,20 +136,37 @@ describe("DelegationStrategy", () => {
 
   describe("generateDelegatedCode", () => {
     it("should generate a valid delegated action code", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
-      expect(result.actionCode.pubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+      expect(result.actionCode.pubkey).toBe(
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      );
       expect(result.actionCode.delegationProof).toBeDefined();
-      expect(result.actionCode.delegationProof.walletPubkey).toBe(mockWallet.publicKey);
-      expect(result.actionCode.delegationProof.delegatedPubkey).toBe(delegatedKeypair.publicKey.toString());
-      expect(result.actionCode.delegationProof.signature).toBe(delegationProof.signature);
+      expect(result.actionCode.delegationProof.walletPubkey).toBe(
+        mockWallet.publicKey
+      );
+      expect(result.actionCode.delegationProof.delegatedPubkey).toBe(
+        delegatedKeypair.publicKey.toString()
+      );
+      expect(result.actionCode.delegationProof.signature).toBe(
+        delegationProof.signature
+      );
     });
 
     it("should generate deterministic codes for the same delegation proof", () => {
-      const result1 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
-      const result2 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result1 = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
+      const result2 = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       expect(result1.actionCode.code).toBe(result2.actionCode.code);
     });
@@ -150,7 +174,7 @@ describe("DelegationStrategy", () => {
     it("should generate different codes for different delegation proofs", () => {
       const delegatedKeypair1 = Keypair.generate();
       const delegatedKeypair2 = Keypair.generate();
-      
+
       const proof1: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
         delegatedPubkey: delegatedKeypair1.publicKey.toString(),
@@ -167,8 +191,14 @@ describe("DelegationStrategy", () => {
         signature: "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
       };
 
-      const signature1 = createRealDelegatedSignature(delegatedKeypair1, strategy);
-      const signature2 = createRealDelegatedSignature(delegatedKeypair2, strategy);
+      const signature1 = createRealDelegatedSignature(
+        delegatedKeypair1,
+        strategy
+      );
+      const signature2 = createRealDelegatedSignature(
+        delegatedKeypair2,
+        strategy
+      );
 
       const result1 = strategy.generateDelegatedCode(proof1, signature1);
       const result2 = strategy.generateDelegatedCode(proof2, signature2);
@@ -221,7 +251,10 @@ describe("DelegationStrategy", () => {
 
   describe("validateDelegatedCode", () => {
     it("should validate a valid delegated action code", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       // Note: We can't test validation here because the signature was created for a dummy message
@@ -241,7 +274,10 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       expect(() => {
@@ -258,7 +294,10 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       expect(() => {
@@ -276,12 +315,17 @@ describe("DelegationStrategy", () => {
         signature: "mock-delegation-signature", // Same signature as original
       };
 
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, differentProof);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should throw error for mismatched expiration", () => {
@@ -293,12 +337,17 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, differentProof);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should throw error for mismatched signature", () => {
@@ -310,66 +359,54 @@ describe("DelegationStrategy", () => {
         signature: "different-signature",
       };
 
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode, differentProof);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
   });
 
   describe("integration with ActionCodesProtocol", () => {
     it("should generate valid delegated action codes", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       expect(result.actionCode).toBeDefined();
       expect(result.actionCode.code).toBeDefined();
-      expect(result.actionCode.pubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
+      expect(result.actionCode.pubkey).toBe(
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      );
       expect(result.actionCode.delegationProof).toBeDefined();
     });
 
     it("should generate codes with correct TTL", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       expect(result.actionCode.expiresAt).toBeGreaterThan(Date.now());
-      expect(result.actionCode.expiresAt).toBeLessThanOrEqual(Date.now() + 300000); // 5 minutes
+      expect(result.actionCode.expiresAt).toBeLessThanOrEqual(
+        Date.now() + 300000
+      ); // 5 minutes
     });
 
     it("should generate codes with correct length", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       expect(result.actionCode.code.length).toBe(6);
-    });
-  });
-
-  describe("deterministic generation", () => {
-    it("should generate same code for same delegation proof across different instances", () => {
-      const strategy1 = new DelegationStrategy({
-        ttlMs: 300000,
-        codeLength: 6,
-        clockSkewMs: 30000,
-      });
-
-      const strategy2 = new DelegationStrategy({
-        ttlMs: 300000,
-        codeLength: 6,
-        clockSkewMs: 30000,
-      });
-
-      const result1 = strategy1.generateDelegatedCode(delegationProof, realDelegatedSignature);
-      const result2 = strategy2.generateDelegatedCode(delegationProof, realDelegatedSignature);
-
-      expect(result1.actionCode.code).toBe(result2.actionCode.code);
-    });
-
-    it("should generate same codes for same delegation proof (deterministic)", () => {
-      const result1 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
-      const result2 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
-
-      expect(result1.actionCode.code).toBe(result2.actionCode.code);
-      expect(result1.actionCode.pubkey).toBe(result2.actionCode.pubkey);
-      expect(result1.actionCode.delegationProof).toEqual(result2.actionCode.delegationProof);
     });
   });
 
@@ -391,16 +428,24 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const result1 = strategy.generateDelegatedCode(proof1, realDelegatedSignature);
+      const result1 = strategy.generateDelegatedCode(
+        proof1,
+        realDelegatedSignature
+      );
       const actionCode1 = result1.actionCode as DelegatedActionCode;
 
       expect(() => {
         strategy.validateDelegatedCode(actionCode1, proof2);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should reject action codes with tampered secrets", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       // Tamper with the action code signature to make validation fail
@@ -417,7 +462,10 @@ describe("DelegationStrategy", () => {
 
   describe("Relayer Scenario Tests", () => {
     it("should allow relayer to validate codes with delegation proof", () => {
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       // Note: We can't test validation here because the signature was created for a dummy message
@@ -433,7 +481,7 @@ describe("DelegationStrategy", () => {
 
     it("should prevent relayer from generating codes even with fake signature", () => {
       const fakeSignature = "fake-signature";
-      
+
       // This should throw during generation due to invalid base58
       expect(() => {
         strategy.generateDelegatedCode(delegationProof, fakeSignature);
@@ -441,8 +489,14 @@ describe("DelegationStrategy", () => {
     });
 
     it("should allow relayer to validate multiple codes from same delegation proof", () => {
-      const result1 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
-      const result2 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result1 = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
+      const result2 = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       const actionCode1 = result1.actionCode as DelegatedActionCode;
       const actionCode2 = result2.actionCode as DelegatedActionCode;
@@ -466,7 +520,10 @@ describe("DelegationStrategy", () => {
         signature: "wrong-signature",
       };
 
-      const result = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
       const actionCode = result.actionCode as DelegatedActionCode;
 
       expect(() => {
@@ -488,7 +545,10 @@ describe("DelegationStrategy", () => {
 
       // Attacker tries to generate codes with stolen proof
       // This should work at the strategy level (proof validation happens at protocol level)
-      const result = strategy.generateDelegatedCode(stolenProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        stolenProof,
+        realDelegatedSignature
+      );
       expect(result.actionCode).toBeDefined();
 
       // But validation at protocol level should fail because signature verification will fail
@@ -514,8 +574,12 @@ describe("DelegationStrategy", () => {
       };
 
       // Generate code with original proof
-      const originalResult = strategy.generateDelegatedCode(originalProof, realDelegatedSignature);
-      const originalActionCode = originalResult.actionCode as DelegatedActionCode;
+      const originalResult = strategy.generateDelegatedCode(
+        originalProof,
+        realDelegatedSignature
+      );
+      const originalActionCode =
+        originalResult.actionCode as DelegatedActionCode;
 
       // Try to validate with tampered proof - should fail
       expect(() => {
@@ -542,13 +606,19 @@ describe("DelegationStrategy", () => {
       };
 
       // Generate code with original proof
-      const originalResult = strategy.generateDelegatedCode(originalProof, realDelegatedSignature);
-      const originalActionCode = originalResult.actionCode as DelegatedActionCode;
+      const originalResult = strategy.generateDelegatedCode(
+        originalProof,
+        realDelegatedSignature
+      );
+      const originalActionCode =
+        originalResult.actionCode as DelegatedActionCode;
 
       // Try to validate with extended proof - should fail
       expect(() => {
         strategy.validateDelegatedCode(originalActionCode, extendedProof);
-      }).toThrow("Action code delegation expiration does not match delegation proof");
+      }).toThrow(
+        "Action code delegation expiration does not match delegation proof"
+      );
     });
 
     it("should prevent delegation proof signature substitution attacks", () => {
@@ -570,13 +640,19 @@ describe("DelegationStrategy", () => {
       };
 
       // Generate code with original proof
-      const originalResult = strategy.generateDelegatedCode(originalProof, realDelegatedSignature);
-      const originalActionCode = originalResult.actionCode as DelegatedActionCode;
+      const originalResult = strategy.generateDelegatedCode(
+        originalProof,
+        realDelegatedSignature
+      );
+      const originalActionCode =
+        originalResult.actionCode as DelegatedActionCode;
 
       // Try to validate with substituted proof - should fail
       expect(() => {
         strategy.validateDelegatedCode(originalActionCode, substitutedProof);
-      }).toThrow("Invalid signature: Action code delegation signature does not match delegation proof");
+      }).toThrow(
+        "Invalid signature: Action code delegation signature does not match delegation proof"
+      );
     });
 
     it("should prevent cross-delegation attacks", () => {
@@ -597,13 +673,18 @@ describe("DelegationStrategy", () => {
       };
 
       // Generate code with proof A
-      const resultA = strategy.generateDelegatedCode(proofA, realDelegatedSignature);
+      const resultA = strategy.generateDelegatedCode(
+        proofA,
+        realDelegatedSignature
+      );
       const actionCodeA = resultA.actionCode as DelegatedActionCode;
 
       // Try to validate with proof B - should fail
       expect(() => {
         strategy.validateDelegatedCode(actionCodeA, proofB);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should prevent delegation proof replay after expiration", () => {
@@ -631,7 +712,10 @@ describe("DelegationStrategy", () => {
       };
 
       // This should work at strategy level, but protocol validation should check reasonableness
-      const result = strategy.generateDelegatedCode(futureProof, realDelegatedSignature);
+      const result = strategy.generateDelegatedCode(
+        futureProof,
+        realDelegatedSignature
+      );
       expect(result.actionCode).toBeDefined();
     });
   });
@@ -654,12 +738,17 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const resultA = strategy.generateDelegatedCode(proofA, realDelegatedSignature);
+      const resultA = strategy.generateDelegatedCode(
+        proofA,
+        realDelegatedSignature
+      );
       const actionCodeA = resultA.actionCode as DelegatedActionCode;
 
       expect(() => {
         strategy.validateDelegatedCode(actionCodeA, proofB);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should accept code generated from DelegationProof A when validated with DelegationProof A", () => {
@@ -671,7 +760,10 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const resultA = strategy.generateDelegatedCode(proofA, realDelegatedSignature);
+      const resultA = strategy.generateDelegatedCode(
+        proofA,
+        realDelegatedSignature
+      );
       const actionCodeA = resultA.actionCode as DelegatedActionCode;
 
       // Note: We can't test validation here because the signature was created for a dummy message
@@ -684,8 +776,11 @@ describe("DelegationStrategy", () => {
 
     it("should reject code generated from DelegationProof B when validated with DelegationProof A", () => {
       const delegatedKeypairB = Keypair.generate();
-      const signatureB = createRealDelegatedSignature(delegatedKeypairB, strategy);
-      
+      const signatureB = createRealDelegatedSignature(
+        delegatedKeypairB,
+        strategy
+      );
+
       const proofA: DelegationProof = {
         walletPubkey: mockWallet.publicKey,
         delegatedPubkey: delegatedKeypair.publicKey.toString(),
@@ -707,7 +802,9 @@ describe("DelegationStrategy", () => {
 
       expect(() => {
         strategy.validateDelegatedCode(actionCodeB, proofA);
-      }).toThrow("Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof");
+      }).toThrow(
+        "Invalid delegatedPubkey: Action code delegated pubkey does not match delegation proof"
+      );
     });
 
     it("should have different delegated pubkeys for different delegation proofs", () => {
@@ -727,25 +824,45 @@ describe("DelegationStrategy", () => {
         signature: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
       };
 
-      const resultA = strategy.generateDelegatedCode(proofA, realDelegatedSignature);
-      const resultB = strategy.generateDelegatedCode(proofB, realDelegatedSignature);
+      const resultA = strategy.generateDelegatedCode(
+        proofA,
+        realDelegatedSignature
+      );
+      const resultB = strategy.generateDelegatedCode(
+        proofB,
+        realDelegatedSignature
+      );
 
       const actionCodeA = resultA.actionCode as DelegatedActionCode;
       const actionCodeB = resultB.actionCode as DelegatedActionCode;
 
-      expect(actionCodeA.delegationProof.delegatedPubkey).toBe("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
-      expect(actionCodeB.delegationProof.delegatedPubkey).toBe(PublicKey.default.toBase58());
-      expect(actionCodeA.delegationProof.delegatedPubkey).not.toBe(actionCodeB.delegationProof.delegatedPubkey);
+      expect(actionCodeA.delegationProof.delegatedPubkey).toBe(
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      );
+      expect(actionCodeB.delegationProof.delegatedPubkey).toBe(
+        PublicKey.default.toBase58()
+      );
+      expect(actionCodeA.delegationProof.delegatedPubkey).not.toBe(
+        actionCodeB.delegationProof.delegatedPubkey
+      );
     });
 
     it("should have same delegated pubkey for same delegation proof", () => {
-      const result1 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
-      const result2 = strategy.generateDelegatedCode(delegationProof, realDelegatedSignature);
+      const result1 = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
+      const result2 = strategy.generateDelegatedCode(
+        delegationProof,
+        realDelegatedSignature
+      );
 
       const actionCode1 = result1.actionCode as DelegatedActionCode;
       const actionCode2 = result2.actionCode as DelegatedActionCode;
 
-      expect(actionCode1.delegationProof.delegatedPubkey).toBe(actionCode2.delegationProof.delegatedPubkey);
-    });
+      expect(actionCode1.delegationProof.delegatedPubkey).toBe(
+        actionCode2.delegationProof.delegatedPubkey
+      );
     });
   });
+});
